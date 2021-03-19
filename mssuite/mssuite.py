@@ -3,6 +3,7 @@ import os
 import warnings
 from collections import Counter
 
+import DynaTMT.DynaTMT as mePROD
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,9 +34,22 @@ class Defaults(object):
         'Abundance:',
     ]
     AbundanceColumn = "Abundance:"
+    file_id = "File ID"
 
+    def processor(self,list_of_df,function, *args,**kwargs):
+        results=[]
+        for count, value in enumerate(list_of_df):
+            results.append(function(value, *args,**kwargs))
+        return results
 
-class Normalizations:
+    def get_channels(self, input_file, custom=None):
+        if custom is None:
+            channels = [col for col in input_file.columns if self.AbundanceColumn in col]
+        else:
+            channels = [col for col in input_file.columns if custom in col]
+        return channels
+
+class Preprocessing:
     def __init__(self):
         pass
 
@@ -48,6 +62,36 @@ class Normalizations:
         input_file = input_file[~input_file[mpa].str.contains(';', na=False)]
         input_file = input_file[input_file['Contaminant'] == False]
         return input_file
+
+    def psm_splitting(self, input_file):
+        '''takes a file of combined PD analysis and splits it into separate dfs for normalization and processing
+        '''
+        try:
+            input_file[Defaults.file_id] = input_file[Defaults.file_id].str.split('.')[0] #split filenames, since everything after the dot are fraction numbers
+        except ValueError:
+            pass
+        grouped_input = input_file.groupby(by=Defaults.file_id)#groupby files
+        
+        arrayofdataframes = [grouped_input.get_group(x) for x in grouped_input.groups]#split dataframe into list of dataframes 
+        return arrayofdataframes #Returns: Array of dataframes 
+    
+    def psm_joining(self, input_list):
+        for idx in range(0,len(input_list)): #reidexing on sequence and modifications
+            print(idx)
+            
+            #print(input_list[idx].index)
+            channels = [col for col in input_list[idx].columns if "Abundance:" in col]
+            input_list[idx]['Identifier'] = input_list[idx]['Annotated Sequence'].map(str) + input_list[idx]['Modifications']
+
+            input_list[idx][channels] = input_list[idx].groupby(['Identifier'])[channels].transform('sum')
+            input_list[idx] = input_list[idx].drop_duplicates(subset=['Identifier'])
+            input_list[idx].index = input_list[idx]['Identifier']
+            input_list[idx]=input_list[idx].add_suffix(idx) #adds to all columns the number of dataset to avoid duplicates
+            #print(input_list[idx].index)
+        
+        Input1=input_list[0].join(input_list[1:],how='inner')
+        print("Done")
+        return Input1
 
     def median_normalisation(self, input_file, channels):
         '''
@@ -109,7 +153,7 @@ class Normalizations:
         for i in range(0, len(l), n):
             yield l[i:i + n]
 
-    def IRS_normalisation(self, input_file, bridge, plexes, quant=Defaults.AbundanceColumn):
+    def IRS_normalisation(self, input_file, bridge, plexes, abundance_column=Defaults.AbundanceColumn):
         '''
         This function performs IRS normalisation for a input pandas df. Bridge channels have to be same TMT channel and plexes must have same size
         bridge = String that defines bridge channel
@@ -118,7 +162,8 @@ class Normalizations:
         '''
         print('Internal Reference scaling')
         # search for quantification columns
-        channels = [col for col in input_file.columns if quant in col]
+        defaults=Defaults()
+        channels = defaults  .get_channels(input_file=input_file, custom=abundance_column)
         # remove missing values from input
         input_file = input_file.dropna(subset=channels)
         # search for bridge channels
@@ -293,11 +338,11 @@ class HypothesisTesting:
                 result.append([source[p1], source[p2]])
         return result
 
-    def peptide_based_lmm(self, input_file, conditions, columns=Defaults.labelsForLMM, norm=Normalizations.total_intensity, pairs=None):
+    def peptide_based_lmm(self, input_file, conditions, columns=Defaults.labelsForLMM, norm=Preprocessing.total_intensity, pairs=None):
         self.pair_names = []
         channels = [col for col in input_file.columns if columns[2] in col]
         if norm is not None:
-            input_file = norm(input_file, channels)
+            input_file = norm(Preprocessing,input_file, channels)
         else:
             input_file = input_file.dropna(subset=channels)
             print('No Normalization applied')
@@ -329,6 +374,7 @@ class HypothesisTesting:
             pass
         print(pairs)
         for pair in pairs:
+   
             
             pair.sort()
             print(pair)
@@ -336,16 +382,17 @@ class HypothesisTesting:
                 melted_Peptides['variable'].str.contains(pair[1], regex=False))]
             temp['value'] = np.log2(temp['value'])
             temp = temp.dropna()
+           
             grouped = temp.groupby(by=['Accession'])
             result_dict = {}
             fold_changes = []
             counter = 0
             for i in grouped.groups:
 
-                temp = grouped.get_group(i)
+                temp2 = grouped.get_group(i)
                 vc = {'Sequence': '0+Sequence'}
                 model = smf.mixedlm(
-                    "value ~ variable + Sequence", temp, groups='Accession', vc_formula=vc)
+                    "value ~ variable + Sequence", temp2, groups='Accession', vc_formula=vc)
                 try:
                     result = model.fit()
                     if counter == 0:
@@ -571,6 +618,52 @@ class Pipelines:
     def __init__(self):
         pass
 
-    def filter_significance(self, input):
-        pass
+    def multifile_lmm(self, psms, conditions,bridge,pairs=None,labels=Defaults.labelsForLMM, mpa=Defaults.MasterProteinAccession,abundance_column=Defaults.AbundanceColumn):
+        defaults = Defaults()
+        process = Preprocessing()
+        hypo = HypothesisTesting()
 
+        channels=defaults.get_channels(psms,custom=abundance_column) #Get channel nammes
+        array_of_dfs=process.psm_splitting(psms)
+        number_of_files = len(array_of_dfs)
+        #Normalization
+        array_of_dfs = defaults.processor(array_of_dfs,process.total_intensity, channels=channels)
+        #join back for IRS
+        joined_df = process.psm_joining(array_of_dfs)
+        #IRS
+        IRS_df = process.IRS_normalisation(joined_df,bridge,number_of_files,abundance_column=abundance_column)
+        #LMM
+        result = hypo.peptide_based_lmm(IRS_df,conditions=conditions,columns=labels,pairs=pairs)
+        return result
+    
+    
+if __name__ == "__main__":
+
+
+
+    '''
+    
+    wd="C://Users/Kevin/Desktop/MassSpec/IRS_TEST/"
+    psms = pd.read_csv(wd+"20210317_KKL_Calu3_pool3_PSMs.txt",sep='\t',header=0)
+    defaults = Defaults()
+    process = Preprocessing()
+    hypo = HypothesisTesting()
+    annot= Annotation()
+    psms=process.filter_peptides(psms)
+    array = process.psm_splitting(psms)
+    channels=defaults.get_channels(psms,custom=defaults.AbundanceColumn)
+    number_of_files = len(array)
+    array_of_dfs = defaults.processor(array,process.total_intensity, channels=channels)
+    joined_df = process.psm_joining(array_of_dfs)
+    joined_df.to_csv(wd+"Intermediate_Join.csv",line_terminator='\n')
+    channels=defaults.get_channels(joined_df,custom=defaults.AbundanceColumn)
+
+    IRS_df = process.IRS_normalisation(joined_df,'129C',number_of_files,abundance_column=defaults.AbundanceColumn)
+    IRS_df.to_csv(wd+"Intermediate_IRS.csv",line_terminator='\n')
+
+    conditions = ['0Mock','FFM1','FFM2','SA','Brasil','B117','Bridge','0Mock','FFM1','FFM2','SA','Brasil','B117','Bridge','0Mock','FFM1','FFM2','SA','Brasil','B117','Bridge']
+    pairs = [['0Mock','FFM1'],['0Mock','FFM2'],['0Mock','SA'],['0Mock','Brasil'],['0Mock','B117']]
+    result = hypo.peptide_based_lmm(IRS_df,conditions=conditions,pairs=pairs)
+    result = annot.basic_annotation(result)
+    result.to_csv(wd+"Result.csv",line_terminator='\n')
+    '''
