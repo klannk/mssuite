@@ -13,13 +13,13 @@ import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from scipy.cluster.hierarchy import dendrogram, distance, fcluster, linkage
 from scipy.spatial import distance_matrix
-from scipy.stats import hypergeom, ttest_ind
+from scipy.stats import hypergeom, trim_mean, ttest_ind
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
-from scipy.stats import trim_mean
 
 warnings.filterwarnings("ignore")
 import os
+
 dirname = os.path.dirname(__file__)
 
 class Defaults(object):
@@ -183,7 +183,6 @@ class Preprocessing:
         print('Done')
         return input_file
 
-
 class Annotation:
     # all functions related to annotation of protein/peptide files
     def __init__(self):
@@ -213,7 +212,6 @@ class Annotation:
             except KeyError:
                 pass
         return input_file
-
 
 class Rollup:
     def __init__(self):
@@ -306,7 +304,6 @@ class Rollup:
 
         return protein_df
 
-
 class HypothesisTesting:
     # Calculate two-sided t-test statistics for pairwise comparisons
 
@@ -318,6 +315,7 @@ class HypothesisTesting:
         # Matrix 1 contains controls and Matrix 2 the treatments
         string = 'P_value_t_test_'+str(name)
         string_fc = 'Fold_change'+str(name)
+        string_q = 'q_value' +str(name)
         for protein in input_data.index:
 
             m1 = input_data.loc[protein, matrix1].to_numpy()
@@ -329,6 +327,15 @@ class HypothesisTesting:
                 input_data.loc[protein, string_fc] = matrix3
             except ValueError:
                 print('Error with: '+protein)
+        input_data[string] = input_data[string].fillna(
+                value=1)
+        pvals = input_data[string].to_numpy()
+
+        reject, pvals_corrected, a, b = multipletests(
+                pvals, method='fdr_bh')
+
+        input_data[string_q] = pvals_corrected
+
         return input_data
 
     def tessa(self, source):
@@ -432,7 +439,6 @@ class HypothesisTesting:
         '''
         return set(self.pair_names)
 
-
 class PathwayEnrichment:
     def __init__(self):
         print("Pathway Enrichment Initialized")
@@ -510,7 +516,6 @@ class PathwayEnrichment:
             resultDf.loc[entry,
                          'Description'] = temp_database.loc[entry, 'Description']
         return resultDf
-
 
 class Correlation:  # TODO finish coexpression clustering algo
 
@@ -613,7 +618,6 @@ class Correlation:  # TODO finish coexpression clustering algo
             Clusters[group] = genes_in_cluster
         return filtered_melted_corr_Matrix, Clusters
 
-
 class Pipelines:
     def __init__(self):
         pass
@@ -636,34 +640,52 @@ class Pipelines:
         result = hypo.peptide_based_lmm(IRS_df,conditions=conditions,columns=labels,pairs=pairs)
         return result
     
-    
-if __name__ == "__main__":
+    def meprod_lmm(self, psms, conditions,pairs=None,labels=Defaults.labelsForLMM, mpa=Defaults.MasterProteinAccession,abundance_column=Defaults.AbundanceColumn,baseline_index=0):
+        defaults = Defaults()
+        process = Preprocessing()
+        hypo = HypothesisTesting()
+        annot = Annotation()
 
+        psms = process.filter_peptides(psms)
+        dyna = mePROD.PD_input(psms)
+        dyna.IT_adjustment()
+        dyna.total_intensity_normalisation()
+        heavy = dyna.extract_heavy()
+        peptides = dyna.baseline_correction_peptide_return(heavy,i_baseline=baseline_index)
+        result = hypo.peptide_based_lmm(peptides,conditions=conditions,pairs=pairs)
+        result = annot.basic_annotation(result)
+        return result
+        
 
-
-    '''
-    
-    wd="C://Users/Kevin/Desktop/MassSpec/IRS_TEST/"
-    psms = pd.read_csv(wd+"20210317_KKL_Calu3_pool3_PSMs.txt",sep='\t',header=0)
+if __name__ == '__main__':
+    wd = 'C://Users/Kevin/Desktop/MassSpec/210326_mutants_phospho/'
+    peptides = pd.read_csv(wd+"20210323_KKL_Mutants_Pool1_Phospho_F_PeptideGroups.txt",sep='\t',header=0)
     defaults = Defaults()
-    process = Preprocessing()
+    preprocessing = Preprocessing()
+    peptides = preprocessing.filter_peptides(peptides)
+    channels = defaults.get_channels(peptides)
+    peptides = preprocessing.total_intensity(peptides,channels)
+    peptides = preprocessing.IRS_normalisation(peptides, bridge='129C',plexes=3)
+    column_names = ['Mock1','FFM1_1','FFM2_1','SA_1','Brasil_1','B.1.1.7_1','Bridge1','Mock2','FFM1_2','FFM2_2','SA_2','Brasil_2','B.1.1.7_2','Bridge2','Mock3','FFM1_3','FFM2_3','SA_3','Brasil_3','B.1.1.7_3','Bridge3']
+    column_dict = {channels[i]: column_names[i] for i in range(len(channels))}
+    
+    peptides = peptides.rename(columns=column_dict)
+    
+    pairs = [
+        [['Mock1','Mock2','Mock3'],['FFM1_1','FFM1_2','FFM1_3']],
+        [['Mock1','Mock2','Mock3'],['FFM2_1','FFM2_2','FFM2_3']],
+        [['Mock1','Mock2','Mock3'],['SA_1','SA_2','SA_3']],
+        [['Mock1','Mock2','Mock3'],['Brasil_1','Brasil_2','Brasil_3']],
+        [['Mock1','Mock2','Mock3'],['B.1.1.7_1','B.1.1.7_2','B.1.1.7_3']]
+    ]
+    names = ['FFM1','FFM2','SA','Brasil','B.1.1.7']
     hypo = HypothesisTesting()
-    annot= Annotation()
-    psms=process.filter_peptides(psms)
-    array = process.psm_splitting(psms)
-    channels=defaults.get_channels(psms,custom=defaults.AbundanceColumn)
-    number_of_files = len(array)
-    array_of_dfs = defaults.processor(array,process.total_intensity, channels=channels)
-    joined_df = process.psm_joining(array_of_dfs)
-    joined_df.to_csv(wd+"Intermediate_Join.csv",line_terminator='\n')
-    channels=defaults.get_channels(joined_df,custom=defaults.AbundanceColumn)
-
-    IRS_df = process.IRS_normalisation(joined_df,'129C',number_of_files,abundance_column=defaults.AbundanceColumn)
-    IRS_df.to_csv(wd+"Intermediate_IRS.csv",line_terminator='\n')
-
-    conditions = ['0Mock','FFM1','FFM2','SA','Brasil','B117','Bridge','0Mock','FFM1','FFM2','SA','Brasil','B117','Bridge','0Mock','FFM1','FFM2','SA','Brasil','B117','Bridge']
-    pairs = [['0Mock','FFM1'],['0Mock','FFM2'],['0Mock','SA'],['0Mock','Brasil'],['0Mock','B117']]
-    result = hypo.peptide_based_lmm(IRS_df,conditions=conditions,pairs=pairs)
-    result = annot.basic_annotation(result)
-    result.to_csv(wd+"Result.csv",line_terminator='\n')
-    '''
+    for i in range(len(pairs)):
+        m1 = pairs[i][0]
+        
+        m2 = pairs[i][1]
+        name = names[i]
+        peptides = hypo.t_test(peptides,matrix1=m1,matrix2=m2,name=name)
+    annot = Annotation()
+    peptides = annot.basic_annotation(peptides)
+    peptides.to_csv(wd+"Result.csv",line_terminator='\n')
