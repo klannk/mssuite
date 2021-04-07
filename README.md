@@ -7,18 +7,18 @@ The mssuite python package provides a framework for streamlined data analysis of
 ### Using pip
 mssuite has been uploaded to the PyPi repository and can be easily installed using the **pip** package manager:
 ```python
-    pip install mssuite
+pip install mssuite
 ```
 Alternatively you can download the binaries and install locally using the following command:
 ```python
-    !cd /PATH/TO/PACKAGE
-    pip install .
+!cd /PATH/TO/PACKAGE
+pip install .
 ```
 ### Compile from source
 To compile from source, please download the package files and compile using python:
 ```python
-    !cd /PATH/TO/PACKAGE
-    python3 -m build
+!cd /PATH/TO/PACKAGE
+python3 -m build
 ```
 ## Quickstart
 Export your proteomics experiment on PSM or Peptide level from ProteomeDiscoverer Software as a tab-delimited text file. mssuite works with pandas dataframes, so you need to load your data as a pandas dataframe:
