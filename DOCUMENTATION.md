@@ -206,9 +206,9 @@ HypothesisTesting.peptide_based_lmm(self, input_file, conditions, norm=Preproces
 ```
 Performs gene-wise linear mixed modelling for differential expression on peptide level.
 * `input_file`: *dataframe* Input data
-* `conditions`: *array* of treatment conditions matching the order of the quantification columns. E.g. ['Control','Treatment','Control','Treatment']
+* `conditions`: *array* of treatment conditions matching the order of the quantification columns. E.g. `['Control','Treatment','Control','Treatment']`
 * `norm`: *function*, normalisation function of the Preprocessing module. If no normalisation should be applied set to `None`
-* `pairs`: *array*, optional. Nested array containing pairs that should be tested for differential analysis. E.g.[['Control','Treatment1'],['Control','Treatment2']]. If None, performs analysis for all possible pairs.
+* `pairs`: *array*, optional. Nested array containing pairs that should be tested for differential analysis. E.g.`[['Control','Treatment1'],['Control','Treatment2']]`. If None, performs analysis for all possible pairs.
 * **Returns**: *dataframe*
 
 ```python
@@ -277,7 +277,7 @@ Produces a clustered heatmap with conditions as labels and saves it to the worki
 
 * `input_file`:*dataframe* containing the quantification values.
 * `channels`: *array* of column names that contain the quantification values. Generate by `Defaults.get_channels`.
-* `conditions`: *array* of treatment conditions matching the order of the quantification columns. E.g. ['Control','Treatment','Control','Treatment'].
+* `conditions`: *array* of treatment conditions matching the order of the quantification columns. E.g. `['Control','Treatment','Control','Treatment']`.
 * `wd`:*str* Working directory path, where output will be saved.
 
 ## Pathway Enrichment
@@ -319,8 +319,8 @@ Pipelines.singlefile_lmm(self, psms, conditions, pairs=None, wd=None,filter=True
 This pipeline takes a single PSM file as an input and performs complete data analysis including: Filtering, Normalisation, differential expression analysis and plotting.
 
 * `psms`:*dataframe* containing the PSM level data from PD
-* `conditions`: *array* of treatment conditions matching the order of the quantification columns. E.g. ['Control','Treatment','Control','Treatment'].
-* `pairs`: *array*, optional. Nested array containing pairs that should be tested for differential analysis. E.g.[['Control','Treatment1'],['Control','Treatment2']]. If None, performs analysis for all possible pairs.
+* `conditions`: *array* of treatment conditions matching the order of the quantification columns. E.g. `['Control','Treatment','Control','Treatment']`.
+* `pairs`: *array*, optional. Nested array containing pairs that should be tested for differential analysis. E.g.`[['Control','Treatment1'],['Control','Treatment2']]`. If None, performs analysis for all possible pairs.
 * `wd`:*str* Working directory path, where output will be saved.
 * `filter`:*bool* If True performs contaminant filtering. Only for PD input files.
 
@@ -330,9 +330,9 @@ Pipelines.multifile_lmm(self, psms, conditions, bridge, pairs=None, wd=None,filt
 This pipeline takes a single PSM file with multiple multiplexes analysed together as an input and performs complete data analysis including: Filtering, Normalisation,IRS, differential expression analysis and plotting.
 
 * `psms`:*dataframe* containing the PSM level data from PD
-* `conditions`: *array* of treatment conditions matching the order of the quantification columns. E.g. ['Control','Treatment','Control','Treatment'].
+* `conditions`: *array* of treatment conditions matching the order of the quantification columns. E.g. `['Control','Treatment','Control','Treatment']`.
 * `bridge`: *str* Channel to use as bridge channel between multiplexes. e.g. '127N'.
-* `pairs`: *array*, optional. Nested array containing pairs that should be tested for differential analysis. E.g.[['Control','Treatment1'],['Control','Treatment2']]. If None, performs analysis for all possible pairs.
+* `pairs`: *array*, optional. Nested array containing pairs that should be tested for differential analysis. E.g.`[['Control','Treatment1'],['Control','Treatment2']]`. If None, performs analysis for all possible pairs.
 * `wd`:*str* Working directory path, where output will be saved.
 * `filter`:*bool* If True performs contaminant filtering. Only for PD input files.
 
