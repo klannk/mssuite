@@ -248,7 +248,7 @@ Creates a *dict* containing upregulated and downregulated genes from comparison.
 ## Visualisation
 This class contains functions to generate automated plots in a data analysis pipeline.
 
-###Methods
+### Methods
 
 ```python
 Visualization.volcano_plot(self, input_file, fold_change, pval, comparison, wd)
@@ -279,6 +279,35 @@ Produces a clustered heatmap with conditions as labels and saves it to the worki
 * `channels`: *array* of column names that contain the quantification values. Generate by `Defaults.get_channels`.
 * `conditions`: *array* of treatment conditions matching the order of the quantification columns. E.g. ['Control','Treatment','Control','Treatment'].
 * `wd`:*str* Working directory path, where output will be saved.
+
+## Pathway Enrichment
+This class performs Reactome pathway enrichment for gene sets, tested either against a custom background or the genome.
+### Class Variables
+* `PathwayEnrichment.database` - contains the filtered reactome database after `PathwayEnrichment.get_background_sizes` or `PathwayErichment.get_pathway_sizes`. 
+* `PathwayEnrichment.counts` - contains the occurances of each pathway in the background
+* `PathwayEnrichment.total` - number of background genes
+### Methods
+
+```python
+PathwayEnrichment.get_background_sizes(self, background=list)
+```
+Calculates the occurances of pathways in a custom background list and stores them to the `PathwayEnrichment.total` variable.
+* `background`:*list* of genes used as background
+
+```python
+PathwayEnrichment.get_pathway_sizes(self, species='Homo sapiens')
+```
+If no custom background is provided then all Genes belonging to `species` are used as background. Calucluates the occurances of each pathway in the species wide background.
+
+* `species`:*str* with species name to use.
+
+```python
+PathwayEnrichment.get_enrichment(self, genes)
+```
+After background occurences have been calculated by either `PathwayEnrichment.get_background_sizes` or `PathwayEnrichment.get_pathway_sizes`, enrichment calculation will be performed with a hypergeometric test testing the provided genes list against the background for enrichment.
+* `genes`:*list* of Accessions to test for enrichment. Have to be UniProt Accessions
+* **Returns**: *dataframe* containing pathways and enrichment statistics.
+
 
 ## Pipelines
 This class contains prebuilt pipelines, that streamline data analysis starting from a PSM/Peptide file, performing processing and normalisation, differential expression analysis and automated plots.
