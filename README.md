@@ -6,17 +6,20 @@ The mssuite python package provides a framework for streamlined data analysis of
 
 ### Using pip
 mssuite has been uploaded to the PyPi repository and can be easily installed using the **pip** package manager:
+```python
     pip install mssuite
-
+```
 Alternatively you can download the binaries and install locally using the following command:
+```python
     !cd /PATH/TO/PACKAGE
     pip install .
-
+```
 ### Compile from source
 To compile from source, please download the package files and compile using python:
+```python
     !cd /PATH/TO/PACKAGE
     python3 -m build
-
+```
 ## Quickstart
 Export your proteomics experiment on PSM or Peptide level from ProteomeDiscoverer Software as a tab-delimited text file. mssuite works with pandas dataframes, so you need to load your data as a pandas dataframe:
 ```python
@@ -25,11 +28,13 @@ import pandas as pd
 psms = pd.read_csv("PATH/TO/FILE.txt",sep='\t',header=0)
 ```
 To calculate the proper statistics you need to specify the experimental conditions in the order they appear in your input file:
+```python
     conditions = ['Control','Control','Control','Treatment','Treatment','Treatment']
-
+```
 Lastly, you need to specify a working directory, where your output files are written:
+```python
     wd = 'YOUR/PATH'
-
+```
 To start the analysis you initialize the Pipelines module from the mssuite package and run the analysis:
 ```python
 pipe = Pipelines()
