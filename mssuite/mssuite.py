@@ -59,10 +59,11 @@ class Preprocessing:
     def __init__(self):
         pass
 
-    def filter_peptides(self, input_file, mpa1=Defaults.MasterProteinAccession):
+    def filter_peptides(self, input_file):
         '''
         Filters peptide files for non-unique peptides and contaminant proteins
         '''
+        mpa1=Defaults.MasterProteinAccession
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
         input_file = input_file[~input_file[mpa].str.contains(';', na=False)]
@@ -161,7 +162,7 @@ class Preprocessing:
         for i in range(0, len(l), n):
             yield l[i:i + n]
 
-    def IRS_normalisation(self, input_file, bridge, plexes, abundance_column=Defaults.AbundanceColumn):
+    def IRS_normalisation(self, input_file, bridge, plexes):
         '''
         This function performs IRS normalisation for a input pandas df. Bridge channels have to be same TMT channel and plexes must have same size
         bridge = String that defines bridge channel
@@ -169,9 +170,10 @@ class Preprocessing:
         quant = String that is included in all Quantification columns
         '''
         print('Internal Reference scaling')
+        abundance_column=Defaults.AbundanceColumn
         # search for quantification columns
         defaults=Defaults()
-        channels = defaults  .get_channels(input_file=input_file, custom=abundance_column)
+        channels = defaults.get_channels(input_file=input_file, custom=abundance_column)
         # remove missing values from input
         input_file = input_file.dropna(subset=channels)
         # search for bridge channels
@@ -350,7 +352,7 @@ class HypothesisTesting:
                 pvals, method='fdr_bh')
 
         input_data[string_q] = pvals_corrected
-
+        self.comparison_data = self.export_comparison_strings()
         return input_data
 
     def tessa(self, source):
@@ -362,9 +364,9 @@ class HypothesisTesting:
                 result.append([source[p1], source[p2]])
         return result
 
-    def peptide_based_lmm(self, input_file, conditions,columns=Defaults().labelsForLMM, norm=Preprocessing.total_intensity, pairs=None):
+    def peptide_based_lmm(self, input_file, conditions, norm=Preprocessing.total_intensity, pairs=None):
         
-
+        columns=Defaults().labelsForLMM
         self.pair_names = []
         channels = [col for col in input_file.columns if columns[2] in col]
         if norm is not None:
