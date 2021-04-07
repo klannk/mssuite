@@ -18,14 +18,14 @@ from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 
 warnings.filterwarnings("ignore")
-import os
-
+mpl.style.use('tableau-colorblind10')
 dirname = os.path.dirname(__file__)
 
-class Defaults(object):
+class Defaults:
     '''
     This object contains PD specific default names for columns. Most functions will access this by default, but
-    can be set manually.
+    can be set manually. To use this package with input files other than Proteome Discoverer, initialise a instance of Defaults and set
+    the column names according to your data layout.
     '''
     MasterProteinAccession = "Master Protein Accessions"
     labelsForLMM = [
@@ -37,12 +37,18 @@ class Defaults(object):
     file_id = "File ID"
 
     def processor(self,list_of_df,function, *args,**kwargs):
+        '''Processor function that applies a certain function to a list of dataframes, to allow rapid batch processing.
+        Returns a list of processed dataframes
+        '''
         results=[]
         for count, value in enumerate(list_of_df):
             results.append(function(value, *args,**kwargs))
         return results
 
     def get_channels(self, input_file, custom=None):
+        '''Returns an array of all column names where Abundances are stored. Accesses Defaults object, but also custom string can be applied. However, its recommended
+        to change defaults.AbundanceColumn for compatibility with all other functions. Its basically just a wrapper for python list comprehension.
+        '''
         if custom is None:
             channels = [col for col in input_file.columns if self.AbundanceColumn in col]
         else:
@@ -76,6 +82,8 @@ class Preprocessing:
         return arrayofdataframes #Returns: Array of dataframes 
     
     def psm_joining(self, input_list):
+        '''Joins all dataframes in a list for IRS normalisation. 
+        '''
         for idx in range(0,len(input_list)): #reidexing on sequence and modifications
             print(idx)
             
@@ -217,7 +225,7 @@ class Rollup:
     def __init__(self):
         pass
 
-    def protein_rollup_sum(self, input_file, channels, mpa1=Defaults.MasterProteinAccession):
+    def protein_rollup_sum(self, input_file, channels):
         '''
         This function takes Peptide level (or PSM) dataframes and performs a sum based rollup to protein level.
         the channels variable takes an array of column names that contain the quantifictions. You can create such an
@@ -229,6 +237,7 @@ class Rollup:
 
         Returns Protein level DF.
         '''
+        mpa1=Defaults().MasterProteinAccession
         print('Calculate Protein quantifications from PSM')
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
@@ -246,7 +255,7 @@ class Rollup:
 
         return protein_df
 
-    def protein_rollup_median(self, input_file, channels,  mpa1=Defaults.MasterProteinAccession):
+    def protein_rollup_median(self, input_file, channels):
         '''
         This function takes Peptide level (or PSM) dataframes and performs a Median based rollup to protein level.
         the channels variable takes an array of column names that contain the quantifictions. You can create such an
@@ -258,6 +267,7 @@ class Rollup:
 
         Returns Protein level DF.
         '''
+        mpa1=Defaults().MasterProteinAccession
         print('Calculate Protein quantifications from PSM')
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
@@ -275,7 +285,7 @@ class Rollup:
 
         return protein_df
 
-    def protein_rollup_mean(self, input_file, channels,  mpa1=Defaults.MasterProteinAccession):
+    def protein_rollup_mean(self, input_file, channels):
         '''
         This function takes Peptide level (or PSM) dataframes and performs a Mean based rollup to protein level.
         the channels variable takes an array of column names that contain the quantifictions. You can create such an
@@ -287,6 +297,7 @@ class Rollup:
 
         Returns Protein level DF.
         '''
+        mpa1=Defaults().MasterProteinAccession
         print('Calculate Protein quantifications from PSM')
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
@@ -309,12 +320,16 @@ class HypothesisTesting:
 
     def __init__(self):
         self.pair_names = []
+        self.comparison_data = {}
 
     def t_test(self, input_data, matrix1, matrix2, name=''):
+        '''Calculates p values and corrected p values (q values, BH-FDR) according to a students t-test (two-sided) for each row/protein in a dataframe. Needs column names for the two matrices as arrays.
+        Name defines the suffix that is added to the resulting columns e.g. comparison.
+        '''
         self.pair_names.append(name)
         # Matrix 1 contains controls and Matrix 2 the treatments
-        string = 'P_value_t_test_'+str(name)
-        string_fc = 'Fold_change'+str(name)
+        string = 'p_value'+str(name)
+        string_fc = 'fold_change'+str(name)
         string_q = 'q_value' +str(name)
         for protein in input_data.index:
 
@@ -339,13 +354,17 @@ class HypothesisTesting:
         return input_data
 
     def tessa(self, source):
+        '''Returns all possible pairs from source as array
+        '''
         result = []
         for p1 in range(len(source)):
             for p2 in range(p1+1, len(source)):
                 result.append([source[p1], source[p2]])
         return result
 
-    def peptide_based_lmm(self, input_file, conditions, columns=Defaults.labelsForLMM, norm=Preprocessing.total_intensity, pairs=None):
+    def peptide_based_lmm(self, input_file, conditions,columns=Defaults().labelsForLMM, norm=Preprocessing.total_intensity, pairs=None):
+        
+
         self.pair_names = []
         channels = [col for col in input_file.columns if columns[2] in col]
         if norm is not None:
@@ -356,7 +375,7 @@ class HypothesisTesting:
         # Protein level quantifications
         roll = Rollup()
         protein_data = roll.protein_rollup_sum(
-            input_file=input_file, channels=channels, mpa1=columns[1])
+            input_file=input_file, channels=channels)
         # Prepare Peptide data for LMM
         Peptides_for_LM = input_file[channels]
 
@@ -415,29 +434,65 @@ class HypothesisTesting:
                     pass
 
             result_df_peptides_LMM = pd.DataFrame.from_dict(
-                result_dict, orient='index', columns=['P value'])
+                result_dict, orient='index', columns=['p_value'])
             result_df_peptides_LMM['fold_change'] = np.array(fold_changes)
             # Multiple testing correction:
-            result_df_peptides_LMM['P value'] = result_df_peptides_LMM['P value'].fillna(
+            result_df_peptides_LMM['p_value'] = result_df_peptides_LMM['p_value'].fillna(
                 value=1)
-            pvals = result_df_peptides_LMM['P value'].to_numpy()
+            pvals = result_df_peptides_LMM['p_value'].to_numpy()
 
             reject, pvals_corrected, a, b = multipletests(
                 pvals, method='fdr_bh')
 
-            result_df_peptides_LMM['q value'] = pvals_corrected
+            result_df_peptides_LMM['q_value'] = pvals_corrected
 
             comparison = str(pair[0]) + '_' + str(pair[1])
             self.pair_names.append(comparison)
             result_df_peptides_LMM = result_df_peptides_LMM.add_suffix(
                 comparison)
             protein_data = protein_data.join(result_df_peptides_LMM)
+        self.comparison_data = self.export_comparison_strings()
         return protein_data
 
     def get_comparisons(self):
         '''Returns all comparisons that have been performed on that dataframe for further use. 
         '''
+        
         return set(self.pair_names)
+
+    def export_comparison_strings(self):
+        '''Returns a nested dictionary (json format) with all comparisons tested during hypothesis testing as keys and the column names for P values, q values and fold changes.
+        '''
+        data = {}
+        for pair in list(set(self.pair_names)):
+            data[pair] = {'name':pair,
+                'pvalue':'p_value'+pair,
+                'qvalue':'q_value'+pair,
+                'fold_change':'fold_change'+pair
+                }
+        return data
+    
+    def get_columnnames_for_comparison(self, comparison):
+        data = self.comparison_data[comparison]
+        return data['fold_change'], data['pvalue'], data['qvalue']
+
+    def get_significant_hits(self, input_data, comparison,fc_cutoff = 0.5, p_cutoff = 0.05, use_q = True):
+        '''Returns all significantly regulated genes from hypothesis testing for further use in pathway enrichment analysis
+        '''
+        comparison_data = self.comparison_data
+               
+        comparison_dict = comparison_data[comparison]
+        fold_change = comparison_dict['fold_change']
+        if use_q == True:
+            pval = comparison_dict['qvalue']
+        else:
+            pval = comparison_dict['pvalue']
+        upregulated = input_data[(input_data[fold_change] > fc_cutoff)&(input_data[pval] < p_cutoff)]
+        downregulated = input_data[(input_data[fold_change] < -fc_cutoff)&(input_data[pval] < p_cutoff)]
+        genes_up = list(upregulated.index)
+        genes_down = list(downregulated.index)
+        data = {'up':genes_up,'down':genes_down}
+        return data            
 
 class PathwayEnrichment:
     def __init__(self):
@@ -482,6 +537,7 @@ class PathwayEnrichment:
     def get_enrichment(self, genes):
         pathways = []
         enrichmentResult = {}
+        genes = list(set(genes))
         listLength = len(genes)
         database = self.database
         counts = self.counts
@@ -506,11 +562,16 @@ class PathwayEnrichment:
         resultDf['Reactome_ID'] = resultDf.index
         # FDR correction
         pvals = resultDf['P value'].values.flatten()
-        fdr = multipletests(pvals, method='fdr_bh')
-        resultDf['FDR'] = fdr[1]
+        try:
+            fdr = multipletests(pvals, method='fdr_bh')
+            resultDf['FDR'] = fdr[1]
+        except ZeroDivisionError:
+            resultDf['FDR'] = pvals
+       
         resultDf = resultDf.sort_values(by='FDR')
-        temp_database = pd.read_csv(
-            "../data/ReactomePathways.txt", sep='\t', header=None, index_col=0)
+        resultDf = resultDf[resultDf['FDR']<0.1]
+        temp_database = pd.read_csv(os.path.join(dirname, 
+            "../data/ReactomePathways.txt"), sep='\t', header=None, index_col=0)
         temp_database.columns = ['Description', 'Species']
         for entry in resultDf.index:
             resultDf.loc[entry,
@@ -518,7 +579,7 @@ class PathwayEnrichment:
         return resultDf
 
 class Correlation:  # TODO finish coexpression clustering algo
-
+    #PRELIMINARY DOES NOT WORK PROPERLY YET
     def __init__(self):
         pass
 
@@ -546,16 +607,16 @@ class Correlation:  # TODO finish coexpression clustering algo
                 plt.axhline(y=max_d, c='k')
         return ddata
 
-    def coexpression(self, data, columnsToUse, cutoff=0.99, samples=[], anova=True):
+    def coexpression(self, data, columnsToUse, cutoff=0.99, conditions=[], anova=True,verbose_plotting = True):
         sns.boxplot(data=data, showfliers=False)
         # Sample array contains treatments for each column if applicable e.g. DMSO DMSO DMSO GTPP GTPP GTPP
         # Perform ANOVA between replicates to filter for high variance proteins
-        data_copy = data.copy()
+        data_copy = data[columnsToUse].copy()
 
         if anova == True:
             for protein in data.index:
                 anova_df = data_copy[data_copy.index == protein]
-                anova_df.columns = samples
+                anova_df.columns = conditions
                 anova_df_melted = pd.melt(anova_df, ignore_index=False)
                 model = ols('value ~ C(variable)', data=anova_df_melted).fit()
                 anova_table = sm.stats.anova_lm(model, typ=2)
@@ -563,10 +624,10 @@ class Correlation:  # TODO finish coexpression clustering algo
                 data.loc[protein, 'P_value'] = P_value
             # Filter for changing proteins in any condition with P value 0.1 (relaxed, because only prefilter)
             data = data[data['P_value'] < 0.1]
-            column_names = np.append(samples, ['P_value'])
+            column_names = np.append(conditions, ['P_value'])
             data.columns = column_names
         else:
-            data.columns = samples
+            data.columns = conditions
         data_grouped = data.groupby(by=data.columns, axis=1).mean()
         print(data_grouped.head(10))
         try:
@@ -579,15 +640,17 @@ class Correlation:  # TODO finish coexpression clustering algo
         # Calcualte Correlation Matrix
         corr_matrix_pearson = trans_log_data.corr(method='pearson')
         flat_pearson = corr_matrix_pearson.values.flatten()
-
-        # Plot matrix
-        plt.matshow(corr_matrix_pearson, cmap='RdBu')
-        plt.title("Pearson")
-        plt.show()
-        # Plot correlation distribution
-        plt.hist(flat_pearson, bins=100)
-        plt.title('Pearson')
-        plt.show()
+        if verbose_plotting == True:
+            # Plot matrix
+            plt.matshow(corr_matrix_pearson, cmap='RdBu')
+            plt.title("Pearson")
+            plt.show()
+            # Plot correlation distribution
+            plt.hist(flat_pearson, bins=100)
+            plt.title('Pearson')
+            plt.show()
+        else:
+            pass
         # Cluster Correlation MAtrix
         correlations_array = np.asarray(corr_matrix_pearson)
         row_linkage = linkage(correlations_array, method='average')
@@ -601,7 +664,10 @@ class Correlation:  # TODO finish coexpression clustering algo
                               show_contracted=True,
                               annotate_above=10,
                               max_d=20)
-        plt.show()
+        if verbose_plotting == True:
+            plt.show()
+        else:
+            pass
         corr_matrix_pearson['Clusters'] = fcluster(
             row_linkage, 20, criterion='distance')
         corr_matrix_pearson['Accession'] = corr_matrix_pearson.index
@@ -618,74 +684,282 @@ class Correlation:  # TODO finish coexpression clustering algo
             Clusters[group] = genes_in_cluster
         return filtered_melted_corr_Matrix, Clusters
 
+class Visualization:
+    #TODO add volcano plots and heatmaps for pipeline output
+    def __init__(self):
+        pass
+
+    def volcano_plot(self, input_file, fold_change, pval,comparison,wd):
+        '''Produces a volcano plot and saves it 
+        '''
+        temp = input_file.copy()
+        
+        temp[pval]=np.where(temp[pval] < 0.000000001, 0.000000001, temp[pval])#For visualization purpose
+        temp['coloring']=1-np.log(temp[pval])+ abs(temp[fold_change]) * 5
+        temp = temp.dropna()
+        fig = sns.scatterplot(x=fold_change,y=pval, data=temp, hue='coloring',legend=False,alpha=0.6,s=12)
+        fig.invert_yaxis()
+        plt.axvline(x=0.5, linewidth=0.5,linestyle='dashed',color='black',alpha=0.5)
+        plt.axvline(x=-0.5, linewidth=0.5,linestyle='dashed',color='black',alpha=0.5)
+        plt.axhline(y=0.05,linewidth=0.5,linestyle='dashed',color='black',alpha=0.5)
+        plt.yscale('log')
+        plt.xlabel('Fold change (log2)')
+        plt.ylabel('P value')
+        plt.title(str(comparison))
+        plt.savefig(wd+str(comparison)+'_Volcano.pdf',transparent=True)
+        plt.close()
+
+    def boxplots(self,input_file, channels,wd):
+        fig= sns.boxplot(data=input_file[channels],showfliers=False)
+        plt.yscale('log')
+        plt.xticks(rotation = 90)
+        plt.xlabel('Sample')
+        plt.ylabel('TMT intensity')
+        plt.title('Sample abundances after processing')
+        plt.subplots_adjust(bottom=0.35)
+        plt.savefig(wd+'TMT_abundances.pdf',transparent=True)
+        plt.close()
+    
+    def heatmap(self,input_file,channels,conditions,wd):
+        temp = input_file[channels].dropna().copy()
+        fig = sns.clustermap(data=temp[channels],z_score=0,xticklabels=conditions,yticklabels=False)
+        plt.savefig(wd+'Clustermap.pdf',transparent=True)
+        plt.close()
+
 class Pipelines:
     def __init__(self):
         pass
 
-    def multifile_lmm(self, psms, conditions,bridge,pairs=None,labels=Defaults.labelsForLMM, mpa=Defaults.MasterProteinAccession,abundance_column=Defaults.AbundanceColumn):
+    def singlefile_lmm(self, psms, conditions,pairs=None,wd=None,filter=True):
         defaults = Defaults()
-        process = Preprocessing()
-        hypo = HypothesisTesting()
-
-        channels=defaults.get_channels(psms,custom=abundance_column) #Get channel nammes
-        array_of_dfs=process.psm_splitting(psms)
-        number_of_files = len(array_of_dfs)
-        #Normalization
-        array_of_dfs = defaults.processor(array_of_dfs,process.total_intensity, channels=channels)
-        #join back for IRS
-        joined_df = process.psm_joining(array_of_dfs)
-        #IRS
-        IRS_df = process.IRS_normalisation(joined_df,bridge,number_of_files,abundance_column=abundance_column)
-        #LMM
-        result = hypo.peptide_based_lmm(IRS_df,conditions=conditions,columns=labels,pairs=pairs)
-        return result
-    
-    def meprod_lmm(self, psms, conditions,pairs=None,labels=Defaults.labelsForLMM, mpa=Defaults.MasterProteinAccession,abundance_column=Defaults.AbundanceColumn,baseline_index=0):
-        defaults = Defaults()
+        labels=defaults.labelsForLMM
+        abundance_column=defaults.AbundanceColumn
         process = Preprocessing()
         hypo = HypothesisTesting()
         annot = Annotation()
+        vis = Visualization()
+        path = PathwayEnrichment()
+        print("Initialized")
+        channels=defaults.get_channels(psms,custom=abundance_column) #Get channel nammes
+        if filter == True:
+            print('Filtering')
+            psms = process.filter_peptides(psms)
+        else:
+            pass
+        print('Peptide based linear models for differential expression')
+        result = hypo.peptide_based_lmm(psms,conditions=conditions,columns=labels,pairs=pairs)
+        #Annotation
+        print('Annotate')
+        result = annot.basic_annotation(result)
+        #vis
+        print('Visualization')
+        channels_02 = defaults.get_channels(result)
+        vis.boxplots(result,channels_02,wd=wd)
+        vis.heatmap(result,channels_02,conditions,wd=wd)
+        comparisons = list(hypo.get_comparisons())
+        for index in range(len(comparisons)):
+            fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
+            vis.volcano_plot(result,fc,p,comparisons[index],wd=wd)
+        #Pathway enrichment
+        print('Pathway Enrichment')
+        background = list(result.index)
+        path.get_background_sizes(background)
+        for index in range(len(comparisons)):
+            hits = hypo.get_significant_hits(result, comparisons[index])
+            up = hits['up']
+            down = hits['down']
+            up_pathways = path.get_enrichment(up)
+            down_pathways = path.get_enrichment(down)
+            up_pathways.to_csv(wd+str(comparisons[index])+'Pathways_UP.csv',line_terminator='\n')
+            down_pathways.to_csv(wd+str(comparisons[index])+'Pathways_DOWN.csv',line_terminator='\n')
+        print('Writing result file')
+        result.to_csv(wd+"Result.csv",line_terminator='\n')
+        print('Done')
+        return result
 
+    def multifile_lmm(self, psms, conditions,bridge,pairs=None,wd=None,filter=True):
+        
+        defaults = Defaults()
+        labels=defaults.labelsForLMM
+        abundance_column=defaults.AbundanceColumn
+        process = Preprocessing()
+        hypo = HypothesisTesting()
+        annot = Annotation()
+        vis = Visualization()
+        path = PathwayEnrichment()
+        print("Initialized")
+        channels=defaults.get_channels(psms,custom=abundance_column) #Get channel nammes
+        if filter == True:
+            print('Filtering')
+            psms = process.filter_peptides(psms)
+        else:
+            pass
+        print('Splitting PSMs')
+        array_of_dfs=process.psm_splitting(psms)
+        number_of_files = len(array_of_dfs)
+        print('Number of Files:',number_of_files)
+        #Normalization
+        print('Normalize each file')
+        array_of_dfs = defaults.processor(array_of_dfs,process.total_intensity, channels=channels)
+        #join back for IRS
+        print('Join for IRS')
+        joined_df = process.psm_joining(array_of_dfs)
+        #IRS
+        print('Preparing for IRS')
+        IRS_df = process.IRS_normalisation(joined_df,bridge,number_of_files,abundance_column=abundance_column)
+        #LMM
+        print('Peptide based linear models for differential expression')
+        result = hypo.peptide_based_lmm(IRS_df,conditions=conditions,columns=labels,pairs=pairs)
+        #Annotation
+        print('Annotate')
+        result = annot.basic_annotation(result)
+        #vis
+        print('Visualization')
+        channels_02 = defaults.get_channels(result)
+        vis.boxplots(result,channels_02,wd=wd)
+        vis.heatmap(result,channels_02,conditions,wd=wd)
+        comparisons = list(hypo.get_comparisons())
+        for index in range(len(comparisons)):
+            fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
+            vis.volcano_plot(result,fc,p,comparisons[index],wd=wd)
+        #Pathway enrichment
+        print('Pathway Enrichment')
+        background = list(result.index)
+        path.get_background_sizes(background)
+        for index in range(len(comparisons)):
+            hits = hypo.get_significant_hits(result, comparisons[index])
+            up = hits['up']
+            down = hits['down']
+            up_pathways = path.get_enrichment(up)
+            down_pathways = path.get_enrichment(down)
+            up_pathways.to_csv(wd+str(comparisons[index])+'Pathways_UP.csv',line_terminator='\n')
+            down_pathways.to_csv(wd+str(comparisons[index])+'Pathways_DOWN.csv',line_terminator='\n')
+        print('Writing result file')
+        result.to_csv(wd+"Result.csv",line_terminator='\n')
+        print('Done')
+        return result
+    
+    def wrapdynaTMT(self, psms,baseline_index=0):
+        dyna = mePROD.PD_input(psms)
+        dyna.IT_adjustment()
+        dyna.total_intensity_normalisation()
+        heavy = dyna.extract_heavy()
+        peptides = dyna.baseline_correction_peptide_return(heavy,i_baseline=baseline_index)
+        return peptides
+
+    def multifile_meprod_lmm(self, psms, conditions,bridge,pairs=None,baseline_index=0,wd=None):
+        defaults = Defaults()
+        labels = defaults.labelsForLMM
+        abundance_column=defaults.AbundanceColumn
+        process = Preprocessing()
+        hypo = HypothesisTesting()
+        annot = Annotation()
+        vis = Visualization()
+        path = PathwayEnrichment()
+        psms = process.filter_peptides(psms)
+        print('Splitting PSMs')
+        array_of_dfs=process.psm_splitting(psms)
+        number_of_files = len(array_of_dfs)
+        print('Number of Files:',number_of_files)
+        #Normalization
+        print('Normalize each file')
+        array_of_dfs = defaults.processor(array_of_dfs,self.wrapdynaTMT,baseline_index=baseline_index)
+        #join back for IRS
+        print('Join for IRS')
+        joined_df = process.psm_joining(array_of_dfs)
+        #IRS
+        print('Preparing for IRS')
+        IRS_df = process.IRS_normalisation(joined_df,bridge,number_of_files,abundance_column=abundance_column)
+        #LMM
+        print('Peptide based linear models for differential expression')
+        result = hypo.peptide_based_lmm(IRS_df,conditions=conditions,columns=labels,pairs=pairs,norm=None)
+        #Annotation
+        print('Annotate')
+        result = annot.basic_annotation(result)
+        #vis
+        print('Visualization')
+        channels_02 = defaults.get_channels(result)
+        vis.boxplots(result,channels_02,wd=wd)
+        vis.heatmap(result,channels_02,conditions,wd=wd)
+        comparisons = list(hypo.get_comparisons())
+        for index in range(len(comparisons)):
+            fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
+            vis.volcano_plot(result,fc,p,comparisons[index],wd=wd)
+        #Pathway enrichment
+        print('Pathway Enrichment')
+        background = list(result.index)
+        path.get_background_sizes(background)
+        for index in range(len(comparisons)):
+            hits = hypo.get_significant_hits(result, comparisons[index])
+            up = hits['up']
+            down = hits['down']
+            up_pathways = path.get_enrichment(up)
+            down_pathways = path.get_enrichment(down)
+            up_pathways.to_csv(wd+str(comparisons[index])+'Pathways_UP.csv',line_terminator='\n')
+            down_pathways.to_csv(wd+str(comparisons[index])+'Pathways_DOWN.csv',line_terminator='\n')
+        print('Writing result file')
+        result.to_csv(wd+"Result.csv",line_terminator='\n')
+        print('Done')
+        return result
+
+    def singlefile_meprod_lmm(self, psms, conditions,pairs=None,baseline_index=0,wd=None):
+        defaults = Defaults()
+        labels = defaults.labelsForLMM
+        process = Preprocessing()
+        hypo = HypothesisTesting()
+        annot = Annotation()
+        vis = Visualization()
+        path = PathwayEnrichment()
         psms = process.filter_peptides(psms)
         dyna = mePROD.PD_input(psms)
         dyna.IT_adjustment()
         dyna.total_intensity_normalisation()
         heavy = dyna.extract_heavy()
         peptides = dyna.baseline_correction_peptide_return(heavy,i_baseline=baseline_index)
-        result = hypo.peptide_based_lmm(peptides,conditions=conditions,pairs=pairs)
+
+        result = hypo.peptide_based_lmm(peptides,conditions=conditions,columns=labels,pairs=pairs,norm=None)
+        #Annotation
+        print('Annotate')
         result = annot.basic_annotation(result)
+        #vis
+        print('Visualization')
+        channels_02 = defaults.get_channels(result)
+        vis.boxplots(result,channels_02,wd=wd)
+        vis.heatmap(result,channels_02,conditions,wd=wd)
+        comparisons = list(hypo.get_comparisons())
+        for index in range(len(comparisons)):
+            fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
+            vis.volcano_plot(result,fc,p,comparisons[index],wd=wd)
+        #Pathway enrichment
+        print('Pathway Enrichment')
+        background = list(result.index)
+        path.get_background_sizes(background)
+        for index in range(len(comparisons)):
+            hits = hypo.get_significant_hits(result, comparisons[index])
+            up = hits['up']
+            down = hits['down']
+            up_pathways = path.get_enrichment(up)
+            down_pathways = path.get_enrichment(down)
+            up_pathways.to_csv(wd+str(comparisons[index])+'Pathways_UP.csv',line_terminator='\n')
+            down_pathways.to_csv(wd+str(comparisons[index])+'Pathways_DOWN.csv',line_terminator='\n')
+        print('Writing result file')
+        result.to_csv(wd+"Result.csv",line_terminator='\n')
+        print('Done')
         return result
+       
         
+def main():
+    #Testing process for pipelines
+   
+    wd = 'C://Users/Kevin/Desktop/MassSpec/Mutants_test_shot/'
+    psms = pd.read_csv(wd+"20210317_KKL_Calu3_pool3_PSMs.txt",sep='\t',header=0)
+    conditions=['0Control','FFM1','FFM2','SA','Brasil','B117','Bridge','0Control','FFM1','FFM2','SA','Brasil','B117','Bridge','0Control','FFM1','FFM2','SA','Brasil','B117','Bridge']
+    bridge = '129C'
+    pairs = [['0Control','FFM1'],['0Contro','FFM2'],['0Control','SA']]
+    pipe = Pipelines()
+    results = pipe.multifile_lmm(psms,conditions,bridge,pairs=pairs,wd=wd)
+
+
 
 if __name__ == '__main__':
-    wd = 'C://Users/Kevin/Desktop/MassSpec/210326_mutants_phospho/'
-    peptides = pd.read_csv(wd+"20210323_KKL_Mutants_Pool1_Phospho_F_PeptideGroups.txt",sep='\t',header=0)
-    defaults = Defaults()
-    preprocessing = Preprocessing()
-    peptides = preprocessing.filter_peptides(peptides)
-    channels = defaults.get_channels(peptides)
-    peptides = preprocessing.total_intensity(peptides,channels)
-    peptides = preprocessing.IRS_normalisation(peptides, bridge='129C',plexes=3)
-    column_names = ['Mock1','FFM1_1','FFM2_1','SA_1','Brasil_1','B.1.1.7_1','Bridge1','Mock2','FFM1_2','FFM2_2','SA_2','Brasil_2','B.1.1.7_2','Bridge2','Mock3','FFM1_3','FFM2_3','SA_3','Brasil_3','B.1.1.7_3','Bridge3']
-    column_dict = {channels[i]: column_names[i] for i in range(len(channels))}
-    
-    peptides = peptides.rename(columns=column_dict)
-    
-    pairs = [
-        [['Mock1','Mock2','Mock3'],['FFM1_1','FFM1_2','FFM1_3']],
-        [['Mock1','Mock2','Mock3'],['FFM2_1','FFM2_2','FFM2_3']],
-        [['Mock1','Mock2','Mock3'],['SA_1','SA_2','SA_3']],
-        [['Mock1','Mock2','Mock3'],['Brasil_1','Brasil_2','Brasil_3']],
-        [['Mock1','Mock2','Mock3'],['B.1.1.7_1','B.1.1.7_2','B.1.1.7_3']]
-    ]
-    names = ['FFM1','FFM2','SA','Brasil','B.1.1.7']
-    hypo = HypothesisTesting()
-    for i in range(len(pairs)):
-        m1 = pairs[i][0]
-        
-        m2 = pairs[i][1]
-        name = names[i]
-        peptides = hypo.t_test(peptides,matrix1=m1,matrix2=m2,name=name)
-    annot = Annotation()
-    peptides = annot.basic_annotation(peptides)
-    peptides.to_csv(wd+"Result.csv",line_terminator='\n')
+   main()
