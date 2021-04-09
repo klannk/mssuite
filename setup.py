@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="mssuite", 
-    version="0.3",
+    version="0.5",
     author="Kevin Klann",
     author_email="klann@em.uni-frankfurt.de",
     description="Collection of data analysis tools",

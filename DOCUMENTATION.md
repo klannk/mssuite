@@ -1,6 +1,6 @@
 # Documentation
 
-## Defaults (class)
+## Defaults 
 
 The mssuite package locates the needed columns in the input dataframe by a string/label based approach. It searches the column names for matching strings and uses them in the downstream analysis. This object contains PD specific default names for columns. The other modules in the package will access this object to derive the needed column names.
 
@@ -59,7 +59,7 @@ Function that returns all intensity/abundance containing column names of the inp
 
 - **Returns**: Array of column names
 
-## Preprocessing (class)
+## Preprocessing
 
 ### Methods
 
@@ -70,7 +70,7 @@ Preprocessing.filter_peptides(self,input_file)
 Function that filters peptides/PSMs for belonging to contaminants and removes razor peptides.
 Only possible for PD inputs at the current stage.
 
-- `input_file`:_dataframe_
+- `input_file`: _dataframe_
   Dataframe containing the peptides/PSMs.
 - **Returns**: _dataframe_
 

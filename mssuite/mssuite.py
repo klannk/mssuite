@@ -1,4 +1,19 @@
-# TODO Testing coexpression clustering
+'''
+# mssuite - implementation of PBLMM algorithm and streamlined data analysis
+# Copyright (C) 2021 Kevin Klann
+#This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+'''
 import os
 import warnings
 from collections import Counter
@@ -369,6 +384,7 @@ class HypothesisTesting:
         columns=Defaults().labelsForLMM
         self.pair_names = []
         channels = [col for col in input_file.columns if columns[2] in col]
+        print(channels)
         if norm is not None:
             input_file = norm(Preprocessing,input_file, channels)
         else:
@@ -691,7 +707,7 @@ class Visualization:
     def __init__(self):
         pass
 
-    def volcano_plot(self, input_file, fold_change, pval,comparison,wd):
+    def volcano_plot(self, input_file, fold_change, pval,comparison,wd,mode='save'):
         '''Produces a volcano plot and saves it 
         '''
         temp = input_file.copy()
@@ -708,10 +724,13 @@ class Visualization:
         plt.xlabel('Fold change (log2)')
         plt.ylabel('P value')
         plt.title(str(comparison))
-        plt.savefig(wd+str(comparison)+'_Volcano.pdf',transparent=True)
+        if mode == 'save':
+            plt.savefig(wd+str(comparison)+'_Volcano.pdf',transparent=True)
+        else:
+            plt.show()
         plt.close()
 
-    def boxplots(self,input_file, channels,wd):
+    def boxplots(self,input_file, channels,wd,mode='save'):
         fig= sns.boxplot(data=input_file[channels],showfliers=False)
         plt.yscale('log')
         plt.xticks(rotation = 90)
@@ -719,13 +738,19 @@ class Visualization:
         plt.ylabel('TMT intensity')
         plt.title('Sample abundances after processing')
         plt.subplots_adjust(bottom=0.35)
-        plt.savefig(wd+'TMT_abundances.pdf',transparent=True)
+        if mode == 'save':
+            plt.savefig(wd+str(comparison)+'_Volcano.pdf',transparent=True)
+        else:
+            plt.show()
         plt.close()
     
-    def heatmap(self,input_file,channels,conditions,wd):
+    def heatmap(self,input_file,channels,conditions,wd,mode='save'):
         temp = input_file[channels].dropna().copy()
         fig = sns.clustermap(data=temp[channels],z_score=0,xticklabels=conditions,yticklabels=False)
-        plt.savefig(wd+'Clustermap.pdf',transparent=True)
+        if mode == 'save':
+            plt.savefig(wd+str(comparison)+'_Volcano.pdf',transparent=True)
+        else:
+            plt.show()
         plt.close()
 
 class Pipelines:
@@ -742,14 +767,17 @@ class Pipelines:
         vis = Visualization()
         path = PathwayEnrichment()
         print("Initialized")
+        
         channels=defaults.get_channels(psms,custom=abundance_column) #Get channel nammes
+        
         if filter == True:
             print('Filtering')
             psms = process.filter_peptides(psms)
         else:
             pass
         print('Peptide based linear models for differential expression')
-        result = hypo.peptide_based_lmm(psms,conditions=conditions,columns=labels,pairs=pairs)
+        
+        result = hypo.peptide_based_lmm(psms,conditions=conditions,pairs=pairs)
         #Annotation
         print('Annotate')
         result = annot.basic_annotation(result)
@@ -775,7 +803,7 @@ class Pipelines:
             up_pathways.to_csv(wd+str(comparisons[index])+'Pathways_UP.csv',line_terminator='\n')
             down_pathways.to_csv(wd+str(comparisons[index])+'Pathways_DOWN.csv',line_terminator='\n')
         print('Writing result file')
-        result.to_csv(wd+"Result.csv",line_terminator='\n')
+        result.to_csv(wd+"Result_groups_accession_0_Sequence.csv",line_terminator='\n')
         print('Done')
         return result
 
@@ -808,10 +836,10 @@ class Pipelines:
         joined_df = process.psm_joining(array_of_dfs)
         #IRS
         print('Preparing for IRS')
-        IRS_df = process.IRS_normalisation(joined_df,bridge,number_of_files,abundance_column=abundance_column)
+        IRS_df = process.IRS_normalisation(joined_df,bridge,number_of_files)
         #LMM
         print('Peptide based linear models for differential expression')
-        result = hypo.peptide_based_lmm(IRS_df,conditions=conditions,columns=labels,pairs=pairs)
+        result = hypo.peptide_based_lmm(IRS_df,conditions=conditions,pairs=pairs)
         #Annotation
         print('Annotate')
         result = annot.basic_annotation(result)
@@ -953,13 +981,13 @@ class Pipelines:
 def main():
     #Testing process for pipelines
    
-    wd = 'C://Users/Kevin/Desktop/MassSpec/Mutants_test_shot/'
-    psms = pd.read_csv(wd+"20210317_KKL_Calu3_pool3_PSMs.txt",sep='\t',header=0)
-    conditions=['0Control','FFM1','FFM2','SA','Brasil','B117','Bridge','0Control','FFM1','FFM2','SA','Brasil','B117','Bridge','0Control','FFM1','FFM2','SA','Brasil','B117','Bridge']
+    wd = 'C://Users/Kevin/Desktop/MassSpec/GroundTruth/Test/'
+    psms = pd.read_csv(wd+"20210226_KKL_GroundT_F-(1)_PSMs.txt",sep='\t',header=0)
+    conditions=['0C','0C','0C','1Mix1','1Mix1','1Mix','2Mix2','2Mix2','2Mix2','3Mix3','3Mix3','3Mix3']
     bridge = '129C'
-    pairs = [['0Control','FFM1'],['0Contro','FFM2'],['0Control','SA']]
+    pairs = [['0C','2Mix2']]
     pipe = Pipelines()
-    results = pipe.multifile_lmm(psms,conditions,bridge,pairs=pairs,wd=wd)
+    results = pipe.singlefile_lmm(psms,conditions,pairs=pairs,wd=wd)
 
 
 
