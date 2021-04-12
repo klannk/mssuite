@@ -440,7 +440,7 @@ class HypothesisTesting:
                 try:
                     result = model.fit()
                     if counter == 0:
-                        print(result.summary())
+                        #print(result.summary())
                         counter = counter + 1
                     else:
                         pass
@@ -707,7 +707,7 @@ class Visualization:
     def __init__(self):
         pass
 
-    def volcano_plot(self, input_file, fold_change, pval,comparison,wd,mode='save'):
+    def volcano_plot(self, input_file, fold_change, pval,comparison,wd,mode='show'):
         '''Produces a volcano plot and saves it 
         '''
         temp = input_file.copy()
@@ -730,7 +730,7 @@ class Visualization:
             plt.show()
         plt.close()
 
-    def boxplots(self,input_file, channels,wd,mode='save'):
+    def boxplots(self,input_file, channels,wd,mode='show'):
         fig= sns.boxplot(data=input_file[channels],showfliers=False)
         plt.yscale('log')
         plt.xticks(rotation = 90)
@@ -739,16 +739,16 @@ class Visualization:
         plt.title('Sample abundances after processing')
         plt.subplots_adjust(bottom=0.35)
         if mode == 'save':
-            plt.savefig(wd+str(comparison)+'_Volcano.pdf',transparent=True)
+            plt.savefig(wd+'_Volcano.pdf',transparent=True)
         else:
             plt.show()
         plt.close()
     
-    def heatmap(self,input_file,channels,conditions,wd,mode='save'):
+    def heatmap(self,input_file,channels,conditions,wd,mode='show'):
         temp = input_file[channels].dropna().copy()
         fig = sns.clustermap(data=temp[channels],z_score=0,xticklabels=conditions,yticklabels=False)
         if mode == 'save':
-            plt.savefig(wd+str(comparison)+'_Volcano.pdf',transparent=True)
+            plt.savefig(wd+'_Volcano.pdf',transparent=True)
         else:
             plt.show()
         plt.close()
@@ -757,7 +757,7 @@ class Pipelines:
     def __init__(self):
         pass
 
-    def singlefile_lmm(self, psms, conditions,pairs=None,wd=None,filter=True):
+    def singlefile_lmm(self, psms, conditions,pairs=None,wd=None,filter=True,mode='save'):
         defaults = Defaults()
         labels=defaults.labelsForLMM
         abundance_column=defaults.AbundanceColumn
@@ -784,12 +784,12 @@ class Pipelines:
         #vis
         print('Visualization')
         channels_02 = defaults.get_channels(result)
-        vis.boxplots(result,channels_02,wd=wd)
-        vis.heatmap(result,channels_02,conditions,wd=wd)
+        vis.boxplots(result,channels_02,wd=wd,mode=mode)
+        vis.heatmap(result,channels_02,conditions,wd=wd,mode=mode)
         comparisons = list(hypo.get_comparisons())
         for index in range(len(comparisons)):
             fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
-            vis.volcano_plot(result,fc,p,comparisons[index],wd=wd)
+            vis.volcano_plot(result,fc,p,comparisons[index],wd=wd,mode=mode)
         #Pathway enrichment
         print('Pathway Enrichment')
         background = list(result.index)
@@ -803,11 +803,11 @@ class Pipelines:
             up_pathways.to_csv(wd+str(comparisons[index])+'Pathways_UP.csv',line_terminator='\n')
             down_pathways.to_csv(wd+str(comparisons[index])+'Pathways_DOWN.csv',line_terminator='\n')
         print('Writing result file')
-        result.to_csv(wd+"Result_groups_accession_0_Sequence.csv",line_terminator='\n')
+        result.to_csv(wd+"Result.csv",line_terminator='\n')
         print('Done')
         return result
 
-    def multifile_lmm(self, psms, conditions,bridge,pairs=None,wd=None,filter=True):
+    def multifile_lmm(self, psms, conditions,bridge,pairs=None,wd=None,filter=True,mode='save'):
         
         defaults = Defaults()
         labels=defaults.labelsForLMM
@@ -846,12 +846,12 @@ class Pipelines:
         #vis
         print('Visualization')
         channels_02 = defaults.get_channels(result)
-        vis.boxplots(result,channels_02,wd=wd)
-        vis.heatmap(result,channels_02,conditions,wd=wd)
+        vis.boxplots(result,channels_02,wd=wd,mode=mode)
+        vis.heatmap(result,channels_02,conditions,wd=wd,mode=mode)
         comparisons = list(hypo.get_comparisons())
         for index in range(len(comparisons)):
             fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
-            vis.volcano_plot(result,fc,p,comparisons[index],wd=wd)
+            vis.volcano_plot(result,fc,p,comparisons[index],wd=wd,mode=mode)
         #Pathway enrichment
         print('Pathway Enrichment')
         background = list(result.index)
