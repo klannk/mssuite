@@ -616,114 +616,6 @@ class PathwayEnrichment:
                          'Description'] = temp_database.loc[entry, 'Description']
         return resultDf
 
-
-class Correlation:  # TODO finish coexpression clustering algo
-    # PRELIMINARY DOES NOT WORK PROPERLY YET
-    def __init__(self):
-        pass
-
-    def fancy_dendrogram(self, *args, **kwargs):
-        max_d = kwargs.pop('max_d', None)
-        if max_d and 'color_threshold' not in kwargs:
-            kwargs['color_threshold'] = max_d
-        annotate_above = kwargs.pop('annotate_above', 0)
-
-        ddata = dendrogram(*args, **kwargs)
-
-        if not kwargs.get('no_plot', False):
-            plt.title('Hierarchical Clustering Dendrogram (truncated)')
-            plt.xlabel('sample index or (cluster size)')
-            plt.ylabel('distance')
-            for i, d, c in zip(ddata['icoord'], ddata['dcoord'], ddata['color_list']):
-                x = 0.5 * sum(i[1:3])
-                y = d[1]
-                if y > annotate_above:
-                    plt.plot(x, y, 'o', c=c)
-                    plt.annotate("%.3g" % y, (x, y), xytext=(0, -5),
-                                 textcoords='offset points',
-                                 va='top', ha='center')
-            if max_d:
-                plt.axhline(y=max_d, c='k')
-        return ddata
-
-    def coexpression(self, data, columnsToUse, cutoff=0.99, conditions=[], anova=True, verbose_plotting=True):
-        sns.boxplot(data=data, showfliers=False)
-        # Sample array contains treatments for each column if applicable e.g. DMSO DMSO DMSO GTPP GTPP GTPP
-        # Perform ANOVA between replicates to filter for high variance proteins
-        data_copy = data[columnsToUse].copy()
-
-        if anova == True:
-            for protein in data.index:
-                anova_df = data_copy[data_copy.index == protein]
-                anova_df.columns = conditions
-                anova_df_melted = pd.melt(anova_df, ignore_index=False)
-                model = ols('value ~ C(variable)', data=anova_df_melted).fit()
-                anova_table = sm.stats.anova_lm(model, typ=2)
-                P_value = anova_table['PR(>F)'][0]
-                data.loc[protein, 'P_value'] = P_value
-            # Filter for changing proteins in any condition with P value 0.1 (relaxed, because only prefilter)
-            data = data[data['P_value'] < 0.1]
-            column_names = np.append(conditions, ['P_value'])
-            data.columns = column_names
-        else:
-            data.columns = conditions
-        data_grouped = data.groupby(by=data.columns, axis=1).mean()
-        print(data_grouped.head(10))
-        try:
-            data_grouped = data_grouped.drop(labels=['P_value'], axis=1)
-        except:
-            pass
-        log_data = data_grouped.transform(np.log2)
-        log_data = log_data.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
-        trans_log_data = log_data.transpose()
-        # Calcualte Correlation Matrix
-        corr_matrix_pearson = trans_log_data.corr(method='pearson')
-        flat_pearson = corr_matrix_pearson.values.flatten()
-        if verbose_plotting == True:
-            # Plot matrix
-            plt.matshow(corr_matrix_pearson, cmap='RdBu')
-            plt.title("Pearson")
-            plt.show()
-            # Plot correlation distribution
-            plt.hist(flat_pearson, bins=100)
-            plt.title('Pearson')
-            plt.show()
-        else:
-            pass
-        # Cluster Correlation MAtrix
-        correlations_array = np.asarray(corr_matrix_pearson)
-        row_linkage = linkage(correlations_array, method='average')
-        plt.figure(figsize=(10, 7))
-        plt.title("Dendogram of Correlation - Hierachichal clustering")
-
-        self.fancy_dendrogram(row_linkage, truncate_mode='lastp',
-                              p=200,
-                              leaf_rotation=90.,
-                              leaf_font_size=12.,
-                              show_contracted=True,
-                              annotate_above=10,
-                              max_d=20)
-        if verbose_plotting == True:
-            plt.show()
-        else:
-            pass
-        corr_matrix_pearson['Clusters'] = fcluster(
-            row_linkage, 20, criterion='distance')
-        corr_matrix_pearson['Accession'] = corr_matrix_pearson.index
-        melted_corr_matrix = corr_matrix_pearson.melt(
-            id_vars=['Accession', 'Clusters'], value_name='Correlation')
-        filtered_melted_corr_Matrix = melted_corr_matrix[melted_corr_matrix['Correlation'] > cutoff]
-        filtered_melted_corr_Matrix = filtered_melted_corr_Matrix[
-            filtered_melted_corr_Matrix['Correlation'] != 1]
-        Clusters = {}
-        grouped_corr_matrix = corr_matrix_pearson.groupby(by=['Clusters'])
-        for group in grouped_corr_matrix.groups:
-            temp_df = grouped_corr_matrix.get_group(group)
-            genes_in_cluster = list(temp_df.index)
-            Clusters[group] = genes_in_cluster
-        return filtered_melted_corr_Matrix, Clusters
-
-
 class Visualization:
     # TODO add volcano plots and heatmaps for pipeline output
     def __init__(self):
@@ -781,7 +673,6 @@ class Visualization:
         else:
             plt.show()
         plt.close()
-
 
 class Pipelines:
     def __init__(self):
