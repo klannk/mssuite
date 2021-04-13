@@ -26,8 +26,6 @@ import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
-from scipy.cluster.hierarchy import dendrogram, distance, fcluster, linkage
-from scipy.spatial import distance_matrix
 from scipy.stats import hypergeom, trim_mean, ttest_ind
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
@@ -71,7 +69,6 @@ class Defaults:
         else:
             channels = [col for col in input_file.columns if custom in col]
         return channels
-
 
 class Preprocessing:
     def __init__(self):
@@ -222,7 +219,6 @@ class Preprocessing:
         print('Done')
         return input_file
 
-
 class Annotation:
     # all functions related to annotation of protein/peptide files
     def __init__(self):
@@ -253,7 +249,6 @@ class Annotation:
             except KeyError:
                 pass
         return input_file
-
 
 class Rollup:
     def __init__(self):
@@ -348,7 +343,6 @@ class Rollup:
         print("Combination done")
 
         return protein_df
-
 
 class HypothesisTesting:
     # Calculate two-sided t-test statistics for pairwise comparisons
@@ -526,11 +520,10 @@ class HypothesisTesting:
             input_data[pval] < p_cutoff)]
         downregulated = input_data[(
             input_data[fold_change] < -fc_cutoff) & (input_data[pval] < p_cutoff)]
-        genes_up = list(upregulated.index)
-        genes_down = list(downregulated.index)
+        genes_up = list(upregulated[Defaults.MasterProteinAccession])
+        genes_down = list(downregulated[Defaults.MasterProteinAccession])
         data = {'up': genes_up, 'down': genes_down}
         return data
-
 
 class PathwayEnrichment:
     def __init__(self):
@@ -540,6 +533,9 @@ class PathwayEnrichment:
         self.total = 0
 
     def get_background_sizes(self, background=list):
+        '''Calculates the occurances of pathways in a custom background list and writes them to class variable for further use in enrichment calculation. The list should contain unique genes, otherwise it will distort the 
+        enrichment calculations.
+        '''
         reactome_database = pd.read_csv(os.path.join(dirname,
                                                      "../data/UniProt2Reactome_PE_All_Levels.txt"), sep='\t', header=None)
         reactome_database.columns = ['Accession', 'Reactome_Protein_Name',
@@ -555,6 +551,8 @@ class PathwayEnrichment:
         self.total = len(background)
 
     def get_pathway_sizes(self, species="Homo sapiens"):
+        '''Calculates the pathway occurences in a genome wide background. Species can be set with the species kwarg. Default species='Homo sapiens'.
+        '''
         # Read file
         reactome_database = pd.read_csv(os.path.join(dirname,
                                                      "../data/UniProt2Reactome_PE_All_Levels.txt"), sep='\t', header=None)
@@ -573,6 +571,9 @@ class PathwayEnrichment:
         self.total = len(accessions)
 
     def get_enrichment(self, genes):
+        '''Calculates pathway enrichment for a list of genes against a background (either PathwayEnrichment.get_background_sizes or PathwayEnrichment.get_pathway_sizes) by a hypergeometric test. Returns a dataframe containing
+        the enrichment result.
+        '''
         pathways = []
         enrichmentResult = {}
         genes = list(set(genes))
@@ -622,7 +623,7 @@ class Visualization:
         pass
 
     def volcano_plot(self, input_file, fold_change, pval, comparison, wd, mode='show'):
-        '''Produces a volcano plot and saves it 
+        '''Produces a volcano plot and saves/shows it.
         '''
         temp = input_file.copy()
 
@@ -651,6 +652,8 @@ class Visualization:
         plt.close()
 
     def boxplots(self, input_file, channels, wd, mode='show'):
+        '''Produces boxplots of all columns specified in the channels argument. E.g. for quality control.
+        '''
         fig = sns.boxplot(data=input_file[channels], showfliers=False)
         plt.yscale('log')
         plt.xticks(rotation=90)
@@ -665,6 +668,8 @@ class Visualization:
         plt.close()
 
     def heatmap(self, input_file, channels, conditions, wd, mode='show'):
+        '''Produces a clustered heatmap from all input columns specified in the channels argument and labels them according to the conditions argument.
+        '''
         temp = input_file[channels].dropna().copy()
         fig = sns.clustermap(
             data=temp[channels], z_score=0, xticklabels=conditions, yticklabels=False)
@@ -728,8 +733,7 @@ class Pipelines:
                 wd+str(comparisons[index])+'Pathways_UP.csv', line_terminator='\n')
             down_pathways.to_csv(
                 wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
-        print('Writing result file')
-        result.to_csv(wd+"Result.csv", line_terminator='\n')
+        
         print('Done')
         return result
 
@@ -797,8 +801,6 @@ class Pipelines:
             down_pathways.to_csv(
                 wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
         print('Writing result file')
-        result.to_csv(wd+"Result.csv", line_terminator='\n')
-        print('Done')
         return result
 
     def wrapdynaTMT(self, psms, baseline_index=0):
@@ -865,8 +867,7 @@ class Pipelines:
                 wd+str(comparisons[index])+'Pathways_UP.csv', line_terminator='\n')
             down_pathways.to_csv(
                 wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
-        print('Writing result file')
-        result.to_csv(wd+"Result.csv", line_terminator='\n')
+       
         print('Done')
         return result
 
@@ -914,8 +915,6 @@ class Pipelines:
                 wd+str(comparisons[index])+'Pathways_UP.csv', line_terminator='\n')
             down_pathways.to_csv(
                 wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
-        print('Writing result file')
-        result.to_csv(wd+"Result.csv", line_terminator='\n')
         print('Done')
         return result
 
@@ -923,14 +922,54 @@ class Pipelines:
 def main():
     # Testing process for pipelines
 
-    wd = 'C://Users/Kevin/Desktop/MassSpec/USP_Phospho/'
+    wd = 'C://Users/Kevin/Desktop/MassSpec/USP_Phospho/Phospho/'
     psms = pd.read_csv(
-        wd+"20210224_KKL_USP_WCP_F_PSMs.txt", sep='\t', header=0)
-    conditions = ['0WT_C', '0WT_C', '0WT_C', '1WT_TBZ', '1WT_TBZ', '1WT_TBZ',
-                  '0USP_C', '0USP_C', '0USP_C', '1USP_TBZ', '1USP_TBZ', '1USP_TBZ']
-    pairs = [['0WT_C', '0USP_C'],['0WT_C','1WT_TBZ'],['0USP_C','1USP_TBZ'],['1WT_TBZ','1USP_TBZ']]
-    pipe = Pipelines()
-    results = pipe.singlefile_lmm(psms, conditions, pairs=pairs, wd=wd,mode='save',filter=True,fc_cutoff=1,p_cutoff=0.05)
+        wd+"20210129_KKL_USP_Phospho_F_PeptideGroups.txt", sep='\t', header=0)
+    conditions = ['0WT_C_P1', '0WT_C_P2', '0WT_C_P3', '1WT_TBZ_P1', '1WT_TBZ_P2', '1WT_TBZ_P3',
+                  '0USP_C_P1', '0USP_C_P2', '0USP_C_P3', '1USP_TBZ_P1', '1USP_TBZ_P2', '1USP_TBZ_P3']
+    pairs = [['0WT_C_P', '0USP_C_P'],['0WT_C_P','1WT_TBZ_P'],['0USP_C_P','1USP_TBZ_P'],['1WT_TBZ_P','1USP_TBZ_P']]
+    defaults = Defaults()
+    process = Preprocessing()
+    hypo = HypothesisTesting()
+    vis = Visualization()
+    annot = Annotation()
+    path = PathwayEnrichment()
+    channels = defaults.get_channels(psms)
+    psms = process.total_intensity(psms, channels)
+    for pair in pairs:
+        m1 = []
+        m2 = []
+        i1 = [i for i, s in enumerate(conditions) if pair[0] in s]
+        for index in i1:
+            m1.append(channels[index])
+        i2 = [i for i, s in enumerate(conditions) if pair[1] in s]
+        for index in i2:
+            m2.append(channels[index])
+        print(m1,m2)
+        string = str(pair[0])+str(pair[1])
+        psms = hypo.t_test(psms,m1,m2,name=string)
+    # Annotation
+    print('Annotate')
+    result = annot.basic_annotation(psms)
+
+    print('Pathway Enrichment')
+    background = list(result.index)
+    path.get_background_sizes(background)
+    comparisons = hypo.get_comparisons()
+    for index in range(len(comparisons)):
+        hits = hypo.get_significant_hits(result, comparisons[index])
+        print(hits)
+        up = hits['up']
+        down = hits['down']
+        up_pathways = path.get_enrichment(up)
+        down_pathways = path.get_enrichment(down)
+        up_pathways.to_csv(
+            wd+str(comparisons[index])+'Pathways_UP.csv', line_terminator='\n')
+        down_pathways.to_csv(
+            wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
+    
+    print('Done')
+
 
 
 if __name__ == '__main__':
