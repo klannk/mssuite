@@ -787,7 +787,7 @@ class Pipelines:
     def __init__(self):
         pass
 
-    def singlefile_lmm(self, psms, conditions, pairs=None, wd=None, filter=True, mode='save'):
+    def singlefile_lmm(self, psms, conditions, pairs=None, wd=None, filter=True, mode='save',fc_cutoff=0.5,p_cutoff=0.05):
         defaults = Defaults()
         labels = defaults.labelsForLMM
         abundance_column = defaults.AbundanceColumn
@@ -842,7 +842,7 @@ class Pipelines:
         print('Done')
         return result
 
-    def multifile_lmm(self, psms, conditions, bridge, pairs=None, wd=None, filter=True, mode='save'):
+    def multifile_lmm(self, psms, conditions, bridge, pairs=None, wd=None, filter=True, mode='save',fc_cutoff=0.5,p_cutoff=0.05):
 
         defaults = Defaults()
         labels = defaults.labelsForLMM
@@ -896,7 +896,7 @@ class Pipelines:
         background = list(result.index)
         path.get_background_sizes(background)
         for index in range(len(comparisons)):
-            hits = hypo.get_significant_hits(result, comparisons[index])
+            hits = hypo.get_significant_hits(result, comparisons[index],fc_cutoff=fc_cutoff,p_cutoff=p_cutoff)
             up = hits['up']
             down = hits['down']
             up_pathways = path.get_enrichment(up)
@@ -919,7 +919,7 @@ class Pipelines:
             heavy, i_baseline=baseline_index)
         return peptides
 
-    def multifile_meprod_lmm(self, psms, conditions, bridge, pairs=None, baseline_index=0, wd=None):
+    def multifile_meprod_lmm(self, psms, conditions, bridge, pairs=None, baseline_index=0, wd=None,fc_cutoff=0.5,p_cutoff=0.05):
         defaults = Defaults()
         labels = defaults.labelsForLMM
         abundance_column = defaults.AbundanceColumn
@@ -965,7 +965,7 @@ class Pipelines:
         background = list(result.index)
         path.get_background_sizes(background)
         for index in range(len(comparisons)):
-            hits = hypo.get_significant_hits(result, comparisons[index])
+            hits = hypo.get_significant_hits(result, comparisons[index],fc_cutoff=fc_cutoff,p_cutoff=p_cutoff)
             up = hits['up']
             down = hits['down']
             up_pathways = path.get_enrichment(up)
@@ -979,7 +979,7 @@ class Pipelines:
         print('Done')
         return result
 
-    def singlefile_meprod_lmm(self, psms, conditions, pairs=None, baseline_index=0, wd=None):
+    def singlefile_meprod_lmm(self, psms, conditions, pairs=None, baseline_index=0, wd=None,fc_cutoff=0.5,p_cutoff=0.05):
         defaults = Defaults()
         labels = defaults.labelsForLMM
         process = Preprocessing()
@@ -1014,7 +1014,7 @@ class Pipelines:
         background = list(result.index)
         path.get_background_sizes(background)
         for index in range(len(comparisons)):
-            hits = hypo.get_significant_hits(result, comparisons[index])
+            hits = hypo.get_significant_hits(result, comparisons[index],fc_cutoff=fc_cutoff,p_cutoff=p_cutoff)
             up = hits['up']
             down = hits['down']
             up_pathways = path.get_enrichment(up)
@@ -1032,15 +1032,14 @@ class Pipelines:
 def main():
     # Testing process for pipelines
 
-    wd = 'C://Users/Kevin/Desktop/MassSpec/GroundTruth/Test/'
+    wd = 'C://Users/Kevin/Desktop/MassSpec/USP_Phospho/'
     psms = pd.read_csv(
-        wd+"20210226_KKL_GroundT_F-(1)_PSMs.txt", sep='\t', header=0)
-    conditions = ['0C', '0C', '0C', '1Mix1', '1Mix1', '1Mix',
-                  '2Mix2', '2Mix2', '2Mix2', '3Mix3', '3Mix3', '3Mix3']
-    bridge = '129C'
-    pairs = [['0C', '2Mix2']]
+        wd+"20210224_KKL_USP_WCP_F_PSMs.txt", sep='\t', header=0)
+    conditions = ['0WT_C', '0WT_C', '0WT_C', '1WT_TBZ', '1WT_TBZ', '1WT_TBZ',
+                  '0USP_C', '0USP_C', '0USP_C', '1USP_TBZ', '1USP_TBZ', '1USP_TBZ']
+    pairs = [['0WT_C', '0USP_C'],['0WT_C','1WT_TBZ'],['0USP_C','1USP_TBZ'],['1WT_TBZ','1USP_TBZ']]
     pipe = Pipelines()
-    results = pipe.singlefile_lmm(psms, conditions, pairs=pairs, wd=wd)
+    results = pipe.singlefile_lmm(psms, conditions, pairs=pairs, wd=wd,mode='save',filter=True,fc_cutoff=1,p_cutoff=0.05)
 
 
 if __name__ == '__main__':
