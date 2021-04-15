@@ -88,12 +88,15 @@ class Preprocessing:
     def psm_splitting(self, input_file):
         '''takes a file of combined PD analysis and splits it into separate dfs for normalization and processing
         '''
-        try:
-            # split filenames, since everything after the dot are fraction numbers
-            input_file[Defaults.file_id] = input_file[Defaults.file_id].str.split('.')[
-                0]
-        except ValueError:
-            pass
+        
+        # split filenames, since everything after the dot are fraction numbers
+        '''
+        for index in input_file.index:
+            input_file.loc[index,Defaults.file_id] = input_file.loc[index,Defaults.file_id].split('.')[0]
+        '''
+        
+        input_file[[Defaults.file_id,'Fraction']] = input_file[Defaults.file_id].str.split('.', expand=True)
+        
         grouped_input = input_file.groupby(
             by=Defaults.file_id)  # groupby files
 
@@ -120,9 +123,14 @@ class Preprocessing:
                 subset=['Identifier'])
             input_list[idx].index = input_list[idx]['Identifier']
             # adds to all columns the number of dataset to avoid duplicates
+            
             input_list[idx] = input_list[idx].add_suffix(idx)
             # print(input_list[idx].index)
-
+            if idx == 0:
+                Defaults.MasterProteinAccession = Defaults.MasterProteinAccession + str(idx)
+            else:
+                pass
+        print(Defaults.MasterProteinAccession)
         Input1 = input_list[0].join(input_list[1:], how='inner')
         print("Done")
         return Input1
@@ -447,7 +455,7 @@ class HypothesisTesting:
                 temp2 = grouped.get_group(i)
                 vc = {'Sequence': '0+Sequence'}
                 model = smf.mixedlm(
-                    "value ~ variable + Sequence", temp2, groups='Accession', vc_formula=vc)
+                    "value ~ variable", temp2, groups='Sequence', vc_formula=vc)
                 try:
                     result = model.fit()
                     if counter == 0:
@@ -505,7 +513,7 @@ class HypothesisTesting:
         data = self.comparison_data[comparison]
         return data['fold_change'], data['pvalue'], data['qvalue']
 
-    def get_significant_hits(self, input_data, comparison, fc_cutoff=0.5, p_cutoff=0.05, use_q=True):
+    def get_significant_hits(self, input_data, comparison, fc_cutoff=0.5, p_cutoff=0.05, use_q=True,pipe=True):
         '''Returns all significantly regulated genes from hypothesis testing for further use in pathway enrichment analysis
         '''
         comparison_data = self.comparison_data
@@ -520,8 +528,12 @@ class HypothesisTesting:
             input_data[pval] < p_cutoff)]
         downregulated = input_data[(
             input_data[fold_change] < -fc_cutoff) & (input_data[pval] < p_cutoff)]
-        genes_up = list(upregulated[Defaults.MasterProteinAccession])
-        genes_down = list(downregulated[Defaults.MasterProteinAccession])
+        if pipe == True:
+            genes_up = list(upregulated.index)
+            genes_down = list(downregulated.index)
+        else:
+            genes_up = list(upregulated[Defaults.MasterProteinAccession])
+            genes_down = list(downregulated[Defaults.MasterProteinAccession])
         data = {'up': genes_up, 'down': genes_down}
         return data
 
@@ -536,6 +548,7 @@ class PathwayEnrichment:
         '''Calculates the occurances of pathways in a custom background list and writes them to class variable for further use in enrichment calculation. The list should contain unique genes, otherwise it will distort the 
         enrichment calculations.
         '''
+        background = list(set(background))
         reactome_database = pd.read_csv(os.path.join(dirname,
                                                      "../data/UniProt2Reactome_PE_All_Levels.txt"), sep='\t', header=None)
         reactome_database.columns = ['Accession', 'Reactome_Protein_Name',
@@ -922,54 +935,17 @@ class Pipelines:
 def main():
     # Testing process for pipelines
 
-    wd = 'C://Users/Kevin/Desktop/MassSpec/USP_Phospho/Phospho/'
+    wd = 'C://Users/Kevin/Desktop/MassSpec/GroundTruth/Test/'
     psms = pd.read_csv(
-        wd+"20210129_KKL_USP_Phospho_F_PeptideGroups.txt", sep='\t', header=0)
-    conditions = ['0WT_C_P1', '0WT_C_P2', '0WT_C_P3', '1WT_TBZ_P1', '1WT_TBZ_P2', '1WT_TBZ_P3',
-                  '0USP_C_P1', '0USP_C_P2', '0USP_C_P3', '1USP_TBZ_P1', '1USP_TBZ_P2', '1USP_TBZ_P3']
-    pairs = [['0WT_C_P', '0USP_C_P'],['0WT_C_P','1WT_TBZ_P'],['0USP_C_P','1USP_TBZ_P'],['1WT_TBZ_P','1USP_TBZ_P']]
-    defaults = Defaults()
-    process = Preprocessing()
-    hypo = HypothesisTesting()
-    vis = Visualization()
-    annot = Annotation()
-    path = PathwayEnrichment()
-    channels = defaults.get_channels(psms)
-    psms = process.total_intensity(psms, channels)
-    for pair in pairs:
-        m1 = []
-        m2 = []
-        i1 = [i for i, s in enumerate(conditions) if pair[0] in s]
-        for index in i1:
-            m1.append(channels[index])
-        i2 = [i for i, s in enumerate(conditions) if pair[1] in s]
-        for index in i2:
-            m2.append(channels[index])
-        print(m1,m2)
-        string = str(pair[0])+str(pair[1])
-        psms = hypo.t_test(psms,m1,m2,name=string)
-    # Annotation
-    print('Annotate')
-    result = annot.basic_annotation(psms)
+        wd+"20210226_KKL_GroundT_F-(1)_PSMs.txt", sep='\t', header=0)
 
-    print('Pathway Enrichment')
-    background = list(result.index)
-    path.get_background_sizes(background)
-    comparisons = hypo.get_comparisons()
-    for index in range(len(comparisons)):
-        hits = hypo.get_significant_hits(result, comparisons[index])
-        print(hits)
-        up = hits['up']
-        down = hits['down']
-        up_pathways = path.get_enrichment(up)
-        down_pathways = path.get_enrichment(down)
-        up_pathways.to_csv(
-            wd+str(comparisons[index])+'Pathways_UP.csv', line_terminator='\n')
-        down_pathways.to_csv(
-            wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
-    
-    print('Done')
-
+    conditions = ['0C', '0C', '0C', 'Mix1', 'Mix1', 'Mix1', 'Mix2','Mix2', 'Mix2', 'Mix3', 'Mix3', 'Mix3']
+    pairs = [['0C', 'Mix2']]
+    bridge = '129C'
+    pipe = Pipelines()
+    results = pipe.singlefile_lmm(psms,conditions,pairs=pairs,wd=wd,filter=True,mode='save')
+    results.to_csv(wd+"Results_without_sequence.csv",line_terminator='\n')
+   
 
 
 if __name__ == '__main__':

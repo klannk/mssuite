@@ -3,3 +3,4 @@ dist
 mssuite.egg-info
 data
 Examples/*.txt
+tests.txt

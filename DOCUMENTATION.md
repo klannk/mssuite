@@ -274,7 +274,7 @@ Extracts the column names from `HypothesisTesting.comparison_data` and returns c
 - **Returns**: fold_change: _str_, p_value: _str_, q_value: _str_ (column names)
 
 ```python
-HypothesisTesting.get_significant_hits(self, input_data, comparison, fc_cutoff=0.5, p_cutoff=0.05, use_q=True)
+HypothesisTesting.get_significant_hits(self, input_data, comparison, fc_cutoff=0.5, p_cutoff=0.05, use_q=True,pipe=True)
 ```
 
 Creates a _dict_ containing upregulated and downregulated genes from comparison.
@@ -284,6 +284,7 @@ Creates a _dict_ containing upregulated and downregulated genes from comparison.
 - `fc_cutoff`: _float_ fold change cutoff used to filter significant hits
 - `p_cutoff`:_float_ p value cutoff used to filter significant hits
 - `use_q`: _bool_ If True uses q_value instead of p value as cutoff for filtering
+- `pipe`: _bool_ If True uses the dataframe index as Accession column, since this is the default output of peptide based lmm. If False searches for the Defaults.MasterProteinAccession column.
 - **Returns**: _dict_
 
 ## Visualisation
@@ -293,7 +294,7 @@ This class contains functions to generate automated plots in a data analysis pip
 ### Methods
 
 ```python
-Visualization.volcano_plot(self, input_file, fold_change, pval, comparison, wd)
+Visualization.volcano_plot(self, input_file, fold_change, pval, comparison, wd,mode='save')
 ```
 
 Produces a volcano plot (plotting fold changes against p-values) for a comparison and saves it to the workind directory
@@ -303,9 +304,10 @@ Produces a volcano plot (plotting fold changes against p-values) for a compariso
 - `pval`:_str_ column name of column that contains the p values. Extract column names by `HypothesisTesting.get_columnnames_for_comparison`.
 - `comparison`: _str_ Element of `HypothesisTesting.pair_names`.
 - `wd`:_str_ Working directory path, where output will be saved.
+- `mode`: _str_ 'save' or 'show' plots
 
 ```python
-Visualization.boxplots(self,input_file,channels,wd)
+Visualization.boxplots(self,input_file,channels,wd,mode='save')
 ```
 
 Produces a boxplot of all quantification channels for quality control and saves it in working directory.
@@ -313,9 +315,10 @@ Produces a boxplot of all quantification channels for quality control and saves 
 - `input_file`: _dataframe_ that contains the quantification values.
 - `channels`: _array_ of column names that contain the quantification values. Generate by `Defaults.get_channels`.
 - `wd`:_str_ Working directory path, where output will be saved.
+- `mode`: _str_ 'save' or 'show' plots
 
 ```python
-Visualization.heatmap(self, input_file,channels,conditions,wd)
+Visualization.heatmap(self, input_file,channels,conditions,wd,mode='save')
 ```
 
 Produces a clustered heatmap with conditions as labels and saves it to the working directory.
@@ -324,6 +327,7 @@ Produces a clustered heatmap with conditions as labels and saves it to the worki
 - `channels`: _array_ of column names that contain the quantification values. Generate by `Defaults.get_channels`.
 - `conditions`: _array_ of treatment conditions matching the order of the quantification columns. E.g. `['Control','Treatment','Control','Treatment']`.
 - `wd`:_str_ Working directory path, where output will be saved.
+- `mode`: _str_ 'save' or 'show' plots
 
 ## Pathway Enrichment
 
