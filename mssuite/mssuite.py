@@ -34,7 +34,6 @@ warnings.filterwarnings("ignore")
 mpl.style.use('tableau-colorblind10')
 dirname = os.path.dirname(__file__)
 
-
 class Defaults:
     '''
     This object contains PD specific default names for columns. Most functions will access this by default, but
@@ -109,7 +108,6 @@ class Preprocessing:
         '''Joins all dataframes in a list for IRS normalisation. 
         '''
         for idx in range(0, len(input_list)):  # reidexing on sequence and modifications
-            print(idx)
 
             # print(input_list[idx].index)
             channels = [
@@ -118,10 +116,11 @@ class Preprocessing:
                 str) + input_list[idx]['Modifications']
 
             input_list[idx][channels] = input_list[idx].groupby(
-                ['Identifier'])[channels].transform('sum')
+                ['Identifier'])[channels].transform('median')
             input_list[idx] = input_list[idx].drop_duplicates(
                 subset=['Identifier'])
             input_list[idx].index = input_list[idx]['Identifier']
+            input_list[idx]['Row_Mean'] = input_list[idx][channels].mean(axis=1)
             # adds to all columns the number of dataset to avoid duplicates
             
             input_list[idx] = input_list[idx].add_suffix(idx)
@@ -203,11 +202,13 @@ class Preprocessing:
         quant = String that is included in all Quantification columns
         '''
         print('Internal Reference scaling')
-        abundance_column = Defaults.AbundanceColumn
+        
         # search for quantification columns
         defaults = Defaults()
+        abundance_column = defaults.AbundanceColumn
         channels = defaults.get_channels(
             input_file=input_file, custom=abundance_column)
+        print(channels)
         # remove missing values from input
         input_file = input_file.dropna(subset=channels)
         # search for bridge channels
@@ -227,12 +228,37 @@ class Preprocessing:
         print('Done')
         return input_file
 
+    def global_average_scaling(self, input_file, plexes):
+        
+        defaults = Defaults()
+        abundance_column = defaults.AbundanceColumn
+        channels = defaults.get_channels(
+            input_file=input_file, custom=abundance_column)
+        input_file = input_file.dropna(subset=channels)
+        mean_columns = [x for x in input_file.columns if 'Row_Mean' in x]
+        mean_mean = np.array(input_file[mean_columns].mean(axis=1))
+        norm_factors = input_file[mean_columns].divide(mean_mean, axis=0)
+        print(norm_factors)
+        norm_cols = norm_factors.columns
+        print(input_file[channels])
+        chunks_channels = list(self.chunks(
+            channels, int(len(channels)/plexes)))
+        for i in range(0, len(chunks_channels), 1):
+            norms = np.array(norm_factors[norm_cols[i]])
+            input_file[chunks_channels[i]
+                       ] = input_file[chunks_channels[i]].divide(norms, axis=0)
+        print(input_file[channels])
+
+        input_file = input_file.dropna(subset=channels)
+        print('Done')
+        return input_file
+
 class Annotation:
     # all functions related to annotation of protein/peptide files
     def __init__(self):
         pass
 
-    def basic_annotation(self, input_file):
+    def basic_annotation(self, input_file,pipe=False):
         '''
         Performs basic annotation and adds Gene symbols, protein names, taxonomy and MW to the df. The
         DFs index needs to be the accession. So far only for human proteins.
@@ -245,17 +271,37 @@ class Annotation:
         database.index = database['Entry']
 
         # Iterate over entries in input file and write annotations
-        for index in input_file.index:
-            try:
-                input_file.loc[index,
-                               'Gene_Symbol'] = str(database.loc[index, 'Gene names']).split(' ')[0]
-                input_file.loc[index,
-                               'Protein_Name'] = database.loc[index, 'Protein names']
-                input_file.loc[index,
-                               'Organism'] = database.loc[index, 'Organism']
-                input_file.loc[index, 'Mass'] = database.loc[index, 'Mass']
-            except KeyError:
-                pass
+        line = 0
+        defaults = Defaults()
+        if pipe == True:
+
+            for index in input_file.index:
+                i = input_file.index[line]
+                try:
+                    input_file.loc[i,
+                                'Gene_Symbol'] = str(database.loc[index, 'Gene names']).split(' ')[0]
+                    input_file.loc[i,
+                                'Protein_Name'] = database.loc[index, 'Protein names']
+                    input_file.loc[i,
+                                'Organism'] = database.loc[index, 'Organism']
+                    input_file.loc[i, 'Mass'] = database.loc[index, 'Mass']
+                except KeyError:
+                    pass
+                line = line+1
+        else:
+            for index in input_file[defaults.MasterProteinAccession]:
+                i = input_file.index[line]
+                try:
+                    input_file.loc[i,
+                                'Gene_Symbol'] = str(database.loc[index, 'Gene names']).split(' ')[0]
+                    input_file.loc[i,
+                                'Protein_Name'] = database.loc[index, 'Protein names']
+                    input_file.loc[i,
+                                'Organism'] = database.loc[index, 'Organism']
+                    input_file.loc[i, 'Mass'] = database.loc[index, 'Mass']
+                except KeyError:
+                    pass
+                line = line+1
         return input_file
 
 class Rollup:
@@ -274,7 +320,8 @@ class Rollup:
 
         Returns Protein level DF.
         '''
-        mpa1 = Defaults().MasterProteinAccession
+        defaults = Defaults()
+        mpa1  =defaults.MasterProteinAccession
         print('Calculate Protein quantifications from PSM')
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
@@ -553,7 +600,8 @@ class PathwayEnrichment:
                                                      "../data/UniProt2Reactome_PE_All_Levels.txt"), sep='\t', header=None)
         reactome_database.columns = ['Accession', 'Reactome_Protein_Name',
                                      'Compartment', 'Reactome_ID', 'URL', 'Description', 'Evidence_Code', 'Species']
-
+        reactome_database = reactome_database.drop_duplicates(subset=['Accession', 
+                                     'Compartment', 'Reactome_ID', 'URL', 'Description', 'Evidence_Code', 'Species'])
         reactome_database['Checked'] = reactome_database['Accession'].isin(
             background)
         reactome_database = reactome_database[reactome_database['Checked'] == True]
@@ -572,7 +620,8 @@ class PathwayEnrichment:
         reactome_database.columns = ['Accession', 'Reactome_Protein_Name',
                                      'Compartment', 'Reactome_ID', 'URL', 'Description', 'Evidence_Code', 'Species']
         # filter by species
-
+        reactome_database = reactome_database.drop_duplicates(subset=['Accession', 
+                                     'Reactome_ID', 'URL', 'Description', 'Evidence_Code', 'Species'])
         reactome_filtered = reactome_database[reactome_database['Species'].str.contains(
             species)]
         # Count proteins per pathway
@@ -600,6 +649,7 @@ class PathwayEnrichment:
                 pathways = pathways + listOfFoundPathways
             except KeyError:
                 print("Gene not found in database")
+
         # Count pathway mentions
         pathwayMentions = Counter(pathways)
         # Calculate Hypergeometric test p value
@@ -608,9 +658,9 @@ class PathwayEnrichment:
             foundSize = pathwayMentions[pathway]
             P_value = hypergeom.sf(
                 (foundSize - 1), self.total, setSize, listLength)
-            enrichmentResult[pathway] = P_value
+            enrichmentResult[pathway] = [P_value, foundSize, setSize]
         resultDf = pd.DataFrame.from_dict(
-            enrichmentResult, orient='index', columns=['P value'])
+            enrichmentResult, orient='index', columns=['P value', 'No. found', 'PathwaySize background'])
         resultDf['Reactome_ID'] = resultDf.index
         # FDR correction
         pvals = resultDf['P value'].values.flatten()
@@ -621,13 +671,18 @@ class PathwayEnrichment:
             resultDf['FDR'] = pvals
 
         resultDf = resultDf.sort_values(by='FDR')
-        resultDf = resultDf[resultDf['FDR'] < 0.1]
+        resultDf = resultDf[resultDf['FDR'] < 0.05]
         temp_database = pd.read_csv(os.path.join(dirname,
                                                  "../data/ReactomePathways.txt"), sep='\t', header=None, index_col=0)
         temp_database.columns = ['Description', 'Species']
         for entry in resultDf.index:
-            resultDf.loc[entry,
-                         'Description'] = temp_database.loc[entry, 'Description']
+            try:
+                resultDf.loc[entry,
+                            'Description'] = temp_database.loc[entry, 'Description']
+                
+            except:
+                pass
+        resultDf.index = resultDf['Description']
         return resultDf
 
 class Visualization:
@@ -635,7 +690,7 @@ class Visualization:
     def __init__(self):
         pass
 
-    def volcano_plot(self, input_file, fold_change, pval, comparison, wd, mode='show'):
+    def volcano_plot(self, input_file, fold_change, pval, comparison, wd, mode='show',fc_line=0.5,p_line=0.05):
         '''Produces a volcano plot and saves/shows it.
         '''
         temp = input_file.copy()
@@ -648,11 +703,11 @@ class Visualization:
         fig = sns.scatterplot(x=fold_change, y=pval, data=temp,
                               hue='coloring', legend=False, alpha=0.6, s=12)
         fig.invert_yaxis()
-        plt.axvline(x=0.5, linewidth=0.5, linestyle='dashed',
+        plt.axvline(x=fc_line, linewidth=0.5, linestyle='dashed',
                     color='black', alpha=0.5)
-        plt.axvline(x=-0.5, linewidth=0.5, linestyle='dashed',
+        plt.axvline(x=-fc_line, linewidth=0.5, linestyle='dashed',
                     color='black', alpha=0.5)
-        plt.axhline(y=0.05, linewidth=0.5, linestyle='dashed',
+        plt.axhline(y=p_line, linewidth=0.5, linestyle='dashed',
                     color='black', alpha=0.5)
         plt.yscale('log')
         plt.xlabel('Fold change (log2)')
@@ -822,10 +877,10 @@ class Pipelines:
         dyna.total_intensity_normalisation()
         heavy = dyna.extract_heavy()
         peptides = dyna.baseline_correction_peptide_return(
-            heavy, i_baseline=baseline_index)
+            heavy, i_baseline=baseline_index,random=True,include_negatives=False)
         return peptides
 
-    def multifile_meprod_lmm(self, psms, conditions, bridge, pairs=None, baseline_index=0, wd=None,fc_cutoff=0.5,p_cutoff=0.05):
+    def multifile_meprod_ttest_global_average(self, psms, conditions, bridge, pairs=None, baseline_index=0, wd=None,fc_cutoff=0.5,p_cutoff=0.05):
         defaults = Defaults()
         labels = defaults.labelsForLMM
         abundance_column = defaults.AbundanceColumn
@@ -834,6 +889,7 @@ class Pipelines:
         annot = Annotation()
         vis = Visualization()
         path = PathwayEnrichment()
+        roll = Rollup()
         psms = process.filter_peptides(psms)
         print('Splitting PSMs')
         array_of_dfs = process.psm_splitting(psms)
@@ -848,24 +904,73 @@ class Pipelines:
         joined_df = process.psm_joining(array_of_dfs)
         # IRS
         print('Preparing for IRS')
-        IRS_df = process.IRS_normalisation(
-            joined_df, bridge, number_of_files, abundance_column=abundance_column)
+        IRS_df = process.global_average_scaling(
+            joined_df, number_of_files)
+        IRS_df.to_csv(wd+"IRS_df.csv",line_terminator='\n')
+
+        channels = defaults.get_channels(IRS_df)
+        protein_rollup = roll.protein_rollup_sum(IRS_df, channels)
+        for pair in pairs:
+            m1 = []
+            m2 = []
+            i1 = [i for i, s in enumerate(conditions) if pair[0] in s]
+            for index in i1:
+                m1.append(channels[index])
+            i2 = [i for i, s in enumerate(conditions) if pair[1] in s]
+            for index in i2:
+                m2.append(channels[index])
+            print(m1,m2)
+            string = str(pair[0])+str(pair[1])
+            protein_rollup = hypo.t_test(protein_rollup,m1,m2,name=string)
+        # Annotation
+        print('Annotate')
+        result = annot.basic_annotation(protein_rollup,pipe=True)
+        result.to_csv(wd+"Result_pipe_t.csv",line_terminator='\n')
+
+
+
+    def multifile_meprod_lmm_global_average(self, psms, conditions, bridge, pairs=None, baseline_index=0, wd=None,fc_cutoff=0.5,p_cutoff=0.05):
+        defaults = Defaults()
+        labels = defaults.labelsForLMM
+        abundance_column = defaults.AbundanceColumn
+        process = Preprocessing()
+        hypo = HypothesisTesting()
+        annot = Annotation()
+        vis = Visualization()
+        path = PathwayEnrichment()
+        roll = Rollup()
+        psms = process.filter_peptides(psms)
+        print('Splitting PSMs')
+        array_of_dfs = process.psm_splitting(psms)
+        number_of_files = len(array_of_dfs)
+        print('Number of Files:', number_of_files)
+        # Normalization
+        print('Normalize each file')
+        array_of_dfs = defaults.processor(
+            array_of_dfs, self.wrapdynaTMT, baseline_index=baseline_index)
+        # join back for IRS
+        print('Join for IRS')
+        joined_df = process.psm_joining(array_of_dfs)
+        # IRS
+        print('Preparing for IRS')
+        IRS_df = process.global_average_scaling(
+            joined_df, number_of_files)
         # LMM
         print('Peptide based linear models for differential expression')
         result = hypo.peptide_based_lmm(
-            IRS_df, conditions=conditions, columns=labels, pairs=pairs, norm=None)
+            IRS_df, conditions=conditions, pairs=pairs, norm=None)
         # Annotation
         print('Annotate')
-        result = annot.basic_annotation(result)
+        result = annot.basic_annotation(result,pipe=True)
         # vis
         print('Visualization')
         channels_02 = defaults.get_channels(result)
-        vis.boxplots(result, channels_02, wd=wd)
-        vis.heatmap(result, channels_02, conditions, wd=wd)
+        vis.boxplots(result, channels_02, wd=wd,mode='save')
+        vis.heatmap(result, channels_02, conditions, wd=wd,mode='save')
         comparisons = list(hypo.get_comparisons())
         for index in range(len(comparisons)):
             fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
-            vis.volcano_plot(result, fc, p, comparisons[index], wd=wd)
+            vis.volcano_plot(result, fc, p, comparisons[index], wd=wd,mode='save',fc_line=fc_cutoff,p_line=p_cutoff)
         # Pathway enrichment
         print('Pathway Enrichment')
         background = list(result.index)
@@ -934,18 +1039,21 @@ class Pipelines:
 
 def main():
     # Testing process for pipelines
-
-    wd = 'C://Users/Kevin/Desktop/MassSpec/GroundTruth/Test/'
+    defaults=Defaults()
+    wd = 'C://Users/Kevin/Desktop/MassSpec/LN308/'
     psms = pd.read_csv(
-        wd+"20210226_KKL_GroundT_F-(1)_PSMs.txt", sep='\t', header=0)
-
-    conditions = ['0C', '0C', '0C', 'Mix1', 'Mix1', 'Mix1', 'Mix2','Mix2', 'Mix2', 'Mix3', 'Mix3', 'Mix3']
-    pairs = [['0C', 'Mix2']]
-    bridge = '129C'
+        wd+"20210412_KKL_LN308_P1_F_PSMs.txt", sep='\t', header=0)
     pipe = Pipelines()
-    results = pipe.singlefile_lmm(psms,conditions,pairs=pairs,wd=wd,filter=True,mode='save')
-    results.to_csv(wd+"Results_without_sequence.csv",line_terminator='\n')
-   
+    conditions = ['Light','0DMSO','Rapamycin','Temozolomide','Rapa+TMZ','Heavy','Light','0DMSO','Rapamycin','Temozolomide','Rapa+TMZ','Heavy','Light','0DMSO','Rapamycin','Temozolomide','Rapa+TMZ','Heavy']
+    pairs = [['0DMSO','Rapamycin'],['0DMSO','Temozolomide'],['0DMSO','Rapa+TMZ'],['Temozolomide','Rapamycin'],['Rapa+TMZ','Rapamycin'],['Rapa+TMZ','Temozolomide']]
+    bridge = '129N'
+    channels = defaults.get_channels(psms)
+    psms = psms.drop(labels=channels[7],axis=1)
+    psms = psms.drop(labels=channels[6],axis=1)
+
+    channels = defaults.get_channels(psms)
+    result = pipe.multifile_meprod_lmm_global_average(psms, conditions,'129N',pairs=pairs, wd=wd,fc_cutoff=0.5)
+    result.to_csv(wd+"Result_LMM_Global_Average.csv",line_terminator='\n')
 
 
 if __name__ == '__main__':
