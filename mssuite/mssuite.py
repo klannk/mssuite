@@ -682,7 +682,10 @@ class PathwayEnrichment:
                 
             except:
                 pass
-        resultDf.index = resultDf['Description']
+        try:
+            resultDf.index = resultDf['Description']
+        except KeyError:
+            pass
         return resultDf
 
 class Visualization:
@@ -776,7 +779,7 @@ class Pipelines:
             psms, conditions=conditions, pairs=pairs)
         # Annotation
         print('Annotate')
-        result = annot.basic_annotation(result)
+        result = annot.basic_annotation(result,pipe=True)
         # vis
         print('Visualization')
         channels_02 = defaults.get_channels(result)
@@ -871,189 +874,21 @@ class Pipelines:
         print('Writing result file')
         return result
 
-    def wrapdynaTMT(self, psms, baseline_index=0):
-        dyna = mePROD.PD_input(psms)
-        dyna.IT_adjustment()
-        dyna.total_intensity_normalisation()
-        heavy = dyna.extract_heavy()
-        peptides = dyna.baseline_correction_peptide_return(
-            heavy, i_baseline=baseline_index,random=True,include_negatives=False)
-        return peptides
-
-    def multifile_meprod_ttest_global_average(self, psms, conditions, bridge, pairs=None, baseline_index=0, wd=None,fc_cutoff=0.5,p_cutoff=0.05):
-        defaults = Defaults()
-        labels = defaults.labelsForLMM
-        abundance_column = defaults.AbundanceColumn
-        process = Preprocessing()
-        hypo = HypothesisTesting()
-        annot = Annotation()
-        vis = Visualization()
-        path = PathwayEnrichment()
-        roll = Rollup()
-        psms = process.filter_peptides(psms)
-        print('Splitting PSMs')
-        array_of_dfs = process.psm_splitting(psms)
-        number_of_files = len(array_of_dfs)
-        print('Number of Files:', number_of_files)
-        # Normalization
-        print('Normalize each file')
-        array_of_dfs = defaults.processor(
-            array_of_dfs, self.wrapdynaTMT, baseline_index=baseline_index)
-        # join back for IRS
-        print('Join for IRS')
-        joined_df = process.psm_joining(array_of_dfs)
-        # IRS
-        print('Preparing for IRS')
-        IRS_df = process.global_average_scaling(
-            joined_df, number_of_files)
-        IRS_df.to_csv(wd+"IRS_df.csv",line_terminator='\n')
-
-        channels = defaults.get_channels(IRS_df)
-        protein_rollup = roll.protein_rollup_sum(IRS_df, channels)
-        for pair in pairs:
-            m1 = []
-            m2 = []
-            i1 = [i for i, s in enumerate(conditions) if pair[0] in s]
-            for index in i1:
-                m1.append(channels[index])
-            i2 = [i for i, s in enumerate(conditions) if pair[1] in s]
-            for index in i2:
-                m2.append(channels[index])
-            print(m1,m2)
-            string = str(pair[0])+str(pair[1])
-            protein_rollup = hypo.t_test(protein_rollup,m1,m2,name=string)
-        # Annotation
-        print('Annotate')
-        result = annot.basic_annotation(protein_rollup,pipe=True)
-        result.to_csv(wd+"Result_pipe_t.csv",line_terminator='\n')
-
-
-
-    def multifile_meprod_lmm_global_average(self, psms, conditions, bridge, pairs=None, baseline_index=0, wd=None,fc_cutoff=0.5,p_cutoff=0.05):
-        defaults = Defaults()
-        labels = defaults.labelsForLMM
-        abundance_column = defaults.AbundanceColumn
-        process = Preprocessing()
-        hypo = HypothesisTesting()
-        annot = Annotation()
-        vis = Visualization()
-        path = PathwayEnrichment()
-        roll = Rollup()
-        psms = process.filter_peptides(psms)
-        print('Splitting PSMs')
-        array_of_dfs = process.psm_splitting(psms)
-        number_of_files = len(array_of_dfs)
-        print('Number of Files:', number_of_files)
-        # Normalization
-        print('Normalize each file')
-        array_of_dfs = defaults.processor(
-            array_of_dfs, self.wrapdynaTMT, baseline_index=baseline_index)
-        # join back for IRS
-        print('Join for IRS')
-        joined_df = process.psm_joining(array_of_dfs)
-        # IRS
-        print('Preparing for IRS')
-        IRS_df = process.global_average_scaling(
-            joined_df, number_of_files)
-        # LMM
-        print('Peptide based linear models for differential expression')
-        result = hypo.peptide_based_lmm(
-            IRS_df, conditions=conditions, pairs=pairs, norm=None)
-        # Annotation
-        print('Annotate')
-        result = annot.basic_annotation(result,pipe=True)
-        # vis
-        print('Visualization')
-        channels_02 = defaults.get_channels(result)
-        vis.boxplots(result, channels_02, wd=wd,mode='save')
-        vis.heatmap(result, channels_02, conditions, wd=wd,mode='save')
-        comparisons = list(hypo.get_comparisons())
-        for index in range(len(comparisons)):
-            fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
-            vis.volcano_plot(result, fc, p, comparisons[index], wd=wd,mode='save',fc_line=fc_cutoff,p_line=p_cutoff)
-        # Pathway enrichment
-        print('Pathway Enrichment')
-        background = list(result.index)
-        path.get_background_sizes(background)
-        for index in range(len(comparisons)):
-            hits = hypo.get_significant_hits(result, comparisons[index],fc_cutoff=fc_cutoff,p_cutoff=p_cutoff)
-            up = hits['up']
-            down = hits['down']
-            up_pathways = path.get_enrichment(up)
-            down_pathways = path.get_enrichment(down)
-            up_pathways.to_csv(
-                wd+str(comparisons[index])+'Pathways_UP.csv', line_terminator='\n')
-            down_pathways.to_csv(
-                wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
-       
-        print('Done')
-        return result
-
-    def singlefile_meprod_lmm(self, psms, conditions, pairs=None, baseline_index=0, wd=None,fc_cutoff=0.5,p_cutoff=0.05):
-        defaults = Defaults()
-        labels = defaults.labelsForLMM
-        process = Preprocessing()
-        hypo = HypothesisTesting()
-        annot = Annotation()
-        vis = Visualization()
-        path = PathwayEnrichment()
-        psms = process.filter_peptides(psms)
-        dyna = mePROD.PD_input(psms)
-        dyna.IT_adjustment()
-        dyna.total_intensity_normalisation()
-        heavy = dyna.extract_heavy()
-        peptides = dyna.baseline_correction_peptide_return(
-            heavy, i_baseline=baseline_index)
-
-        result = hypo.peptide_based_lmm(
-            peptides, conditions=conditions, columns=labels, pairs=pairs, norm=None)
-        # Annotation
-        print('Annotate')
-        result = annot.basic_annotation(result)
-        # vis
-        print('Visualization')
-        channels_02 = defaults.get_channels(result)
-        vis.boxplots(result, channels_02, wd=wd)
-        vis.heatmap(result, channels_02, conditions, wd=wd)
-        comparisons = list(hypo.get_comparisons())
-        for index in range(len(comparisons)):
-            fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
-            vis.volcano_plot(result, fc, p, comparisons[index], wd=wd)
-        # Pathway enrichment
-        print('Pathway Enrichment')
-        background = list(result.index)
-        path.get_background_sizes(background)
-        for index in range(len(comparisons)):
-            hits = hypo.get_significant_hits(result, comparisons[index],fc_cutoff=fc_cutoff,p_cutoff=p_cutoff)
-            up = hits['up']
-            down = hits['down']
-            up_pathways = path.get_enrichment(up)
-            down_pathways = path.get_enrichment(down)
-            up_pathways.to_csv(
-                wd+str(comparisons[index])+'Pathways_UP.csv', line_terminator='\n')
-            down_pathways.to_csv(
-                wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
-        print('Done')
-        return result
 
 
 def main():
     # Testing process for pipelines
     defaults=Defaults()
-    wd = 'C://Users/Kevin/Desktop/MassSpec/LN308/'
+    wd = 'C://Users/Kevin/Desktop/MassSpec/Salmonella_Test_MEF/'
     psms = pd.read_csv(
-        wd+"20210412_KKL_LN308_P1_F_PSMs.txt", sep='\t', header=0)
+        wd+"PSMs.txt", sep='\t', header=0)
     pipe = Pipelines()
-    conditions = ['Light','0DMSO','Rapamycin','Temozolomide','Rapa+TMZ','Heavy','Light','0DMSO','Rapamycin','Temozolomide','Rapa+TMZ','Heavy','Light','0DMSO','Rapamycin','Temozolomide','Rapa+TMZ','Heavy']
-    pairs = [['0DMSO','Rapamycin'],['0DMSO','Temozolomide'],['0DMSO','Rapa+TMZ'],['Temozolomide','Rapamycin'],['Rapa+TMZ','Rapamycin'],['Rapa+TMZ','Temozolomide']]
-    bridge = '129N'
+    conditions = ['0Mock','0Mock','0Mock','0Mock','0Mock','Salmonella','Salmonella','Salmonella','Salmonella','Salmonella']
+    
     channels = defaults.get_channels(psms)
-    psms = psms.drop(labels=channels[7],axis=1)
-    psms = psms.drop(labels=channels[6],axis=1)
 
-    channels = defaults.get_channels(psms)
-    result = pipe.multifile_meprod_lmm_global_average(psms, conditions,'129N',pairs=pairs, wd=wd,fc_cutoff=0.5)
-    result.to_csv(wd+"Result_LMM_Global_Average.csv",line_terminator='\n')
+    result = pipe.singlefile_lmm(psms, conditions,wd=wd,fc_cutoff=0.5)
+    result.to_csv(wd+"Result_LMM.csv",line_terminator='\n')
 
 
 if __name__ == '__main__':
