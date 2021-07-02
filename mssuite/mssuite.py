@@ -591,17 +591,21 @@ class PathwayEnrichment:
         self.counts = None
         self.total = 0
 
-    def get_background_sizes(self, background=list):
+    def get_background_sizes(self, background=list, all_levels=False):
         '''Calculates the occurances of pathways in a custom background list and writes them to class variable for further use in enrichment calculation. The list should contain unique genes, otherwise it will distort the 
         enrichment calculations.
         '''
         background = list(set(background))
-        reactome_database = pd.read_csv(os.path.join(dirname,
-                                                     "../data/UniProt2Reactome_PE_All_Levels.txt"), sep='\t', header=None)
-        reactome_database.columns = ['Accession', 'Reactome_Protein_Name',
-                                     'Compartment', 'Reactome_ID', 'URL', 'Description', 'Evidence_Code', 'Species']
+        if all_levels == False:
+            reactome_database = pd.read_csv(os.path.join(dirname,
+                                                        "../data/UniProt2Reactome.txt"), sep='\t', header=None)
+        else:
+            reactome_database = pd.read_csv(os.path.join(dirname,
+                                                        "../data/UniProt2Reactome_All_Levels.txt"), sep='\t', header=None)
+        reactome_database.columns = ['Accession', 'Reactome_ID',
+                                      'URL', 'Description', 'Evidence_Code', 'Species']
         reactome_database = reactome_database.drop_duplicates(subset=['Accession', 
-                                     'Compartment', 'Reactome_ID', 'URL', 'Description', 'Evidence_Code', 'Species'])
+                                     'Reactome_ID', 'URL', 'Description', 'Evidence_Code', 'Species'])
         reactome_database['Checked'] = reactome_database['Accession'].isin(
             background)
         reactome_database = reactome_database[reactome_database['Checked'] == True]
@@ -611,17 +615,22 @@ class PathwayEnrichment:
         self.counts = grouped_reactome.iloc[:, 0]
         self.total = len(background)
 
-    def get_pathway_sizes(self, species="Homo sapiens"):
+    def get_pathway_sizes(self, species="Homo sapiens", all_levels=False):
         '''Calculates the pathway occurences in a genome wide background. Species can be set with the species kwarg. Default species='Homo sapiens'.
         '''
         # Read file
-        reactome_database = pd.read_csv(os.path.join(dirname,
-                                                     "../data/UniProt2Reactome_PE_All_Levels.txt"), sep='\t', header=None)
-        reactome_database.columns = ['Accession', 'Reactome_Protein_Name',
-                                     'Compartment', 'Reactome_ID', 'URL', 'Description', 'Evidence_Code', 'Species']
-        # filter by species
+        if all_levels == False:
+            reactome_database = pd.read_csv(os.path.join(dirname,
+                                                        "../data/UniProt2Reactome.txt"), sep='\t', header=None)
+        else:
+            reactome_database = pd.read_csv(os.path.join(dirname,
+                                                        "../data/UniProt2Reactome_All_Levels.txt"), sep='\t', header=None)
+        reactome_database.columns = ['Accession', 'Reactome_ID',
+                                      'URL', 'Description', 'Evidence_Code', 'Species']
         reactome_database = reactome_database.drop_duplicates(subset=['Accession', 
                                      'Reactome_ID', 'URL', 'Description', 'Evidence_Code', 'Species'])
+        # filter by species
+        
         reactome_filtered = reactome_database[reactome_database['Species'].str.contains(
             species)]
         # Count proteins per pathway
