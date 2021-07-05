@@ -29,7 +29,7 @@ import statsmodels.formula.api as smf
 from scipy.stats import hypergeom, trim_mean, ttest_ind
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
-
+import concurrent.futures as futures
 warnings.filterwarnings("ignore")
 mpl.style.use('tableau-colorblind10')
 dirname = os.path.dirname(__file__)
@@ -445,6 +445,8 @@ class HypothesisTesting:
             for p2 in range(p1+1, len(source)):
                 result.append([source[p1], source[p2]])
         return result
+
+     
 
     def peptide_based_lmm(self, input_file, conditions, norm=Preprocessing.total_intensity, pairs=None):
 
@@ -883,21 +885,115 @@ class Pipelines:
         print('Writing result file')
         return result
 
+class Multiprocessing:
+    def __init__(self):
+        pass
+    
+    def singlefile_lmm(self, psms, conditions, number_of_processes=1, pairs=None, wd=None, filter=True, mode='save',fc_cutoff=0.5,p_cutoff=0.05, norm=Preprocessing.total_intensity):
+        defaults = Defaults()
+        labels = defaults.labelsForLMM
+        abundance_column = defaults.AbundanceColumn
+        process = Preprocessing()
+        hypo = HypothesisTesting()
+        annot = Annotation()
+        vis = Visualization()
+        path = PathwayEnrichment()
+        print("Initialized")
+
+        channels = defaults.get_channels(
+            psms, custom=abundance_column)  # Get channel nammes
+
+        if filter == True:
+            print('Filtering')
+            psms = process.filter_peptides(psms)
+        else:
+            pass
+        print('Peptide based linear models for differential expression')
+        if norm is not None:
+            input_file = norm(Preprocessing, psms, channels)
+        else:
+            input_file = psms.dropna(subset=channels)
+            print('No Normalization applied')
+        
+        gene_list = list(set(psms[defaults.MasterProteinAccession]))
+        n_size = round(len(gene_list)/number_of_processes)
+        accession_splits = list(process.chunks(gene_list, n_size))
+        temp_dfs = []
+        for i in range(len(accession_splits)):
+            temp = psms[psms[defaults.MasterProteinAccession].isin(values=accession_splits[i])]
+            temp_dfs.append(temp)
+        results=[]
+        with futures.ProcessPoolExecutor(max_workers=number_of_processes) as executor:
+            future_to_df = {executor.submit(hypo.peptide_based_lmm,df,conditions, pairs=pairs,norm=None): df for df in temp_dfs}
+            counter=0
+            for future in futures.as_completed(future_to_df):
+                counter = counter + 1
+                result = future_to_df[future]
+                try:
+                    data = future.result()
+                    results.append(data)
+                except Exception as exc:
+                    print(exc)
+                else:
+                    pass
+
+        for i in range(len(results)):
+            if i == 0:
+                pass
+            else:
+                results[0]=results[0].append(results[i])
+                print(len(results[0]))
+        result = results[0]
+        del results, temp_dfs
+        # Annotation
+        print('Annotate')
+        result = annot.basic_annotation(result,pipe=True)
+        # vis
+        print('Visualization')
+        channels_02 = defaults.get_channels(result)
+        vis.boxplots(result, channels_02, wd=wd, mode=mode)
+        vis.heatmap(result, channels_02, conditions, wd=wd, mode=mode)
+        comparisons = list(hypo.get_comparisons())
+        for index in range(len(comparisons)):
+            fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
+            vis.volcano_plot(
+                result, fc, p, comparisons[index], wd=wd, mode=mode)
+        # Pathway enrichment
+        print('Pathway Enrichment')
+        background = list(result.index)
+        path.get_background_sizes(background)
+        for index in range(len(comparisons)):
+            hits = hypo.get_significant_hits(result, comparisons[index])
+            up = hits['up']
+            down = hits['down']
+            up_pathways = path.get_enrichment(up)
+            down_pathways = path.get_enrichment(down)
+            up_pathways.to_csv(
+                wd+str(comparisons[index])+'Pathways_UP.csv', line_terminator='\n')
+            down_pathways.to_csv(
+                wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
+        
+        print('Done')
+        return result
 
 
 def main():
     # Testing process for pipelines
+    import time
+    
     defaults=Defaults()
-    wd = 'C://Users/Kevin/Desktop/MassSpec/Salmonella_Test_MEF/'
+    wd = 'C://Users/Kevin/Desktop/PhD/MassSpec/Salmonella_Test_MEF/'
     psms = pd.read_csv(
         wd+"PSMs.txt", sep='\t', header=0)
-    pipe = Pipelines()
+    multi = Multiprocessing()
     conditions = ['0Mock','0Mock','0Mock','0Mock','0Mock','Salmonella','Salmonella','Salmonella','Salmonella','Salmonella']
     
-    channels = defaults.get_channels(psms)
-
-    result = pipe.singlefile_lmm(psms, conditions,wd=wd,fc_cutoff=0.5)
-    result.to_csv(wd+"Result_LMM.csv",line_terminator='\n')
+    start = time.time()
+    result = multi.singlefile_lmm(psms, conditions,wd=wd,fc_cutoff=0.5,number_of_processes=6)
+    end= time.time()
+    delta=end-start
+    print('Execution took %.2f seconds' % delta)
+    result.to_csv(wd+"Result_LMM_Multi.csv",line_terminator='\n')
 
 
 if __name__ == '__main__':

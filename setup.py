@@ -14,5 +14,6 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    install_requires =['statsmodels','pandas','numpy','DynaTMT-py','seaborn','scipy','matplotlib'],
     python_requires='>=3.6',
 )
