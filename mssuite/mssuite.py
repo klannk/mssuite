@@ -17,7 +17,6 @@
 import os
 import warnings
 from collections import Counter
-
 import DynaTMT.DynaTMT as mePROD
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -447,7 +446,6 @@ class HypothesisTesting:
         return result
 
      
-
     def peptide_based_lmm(self, input_file, conditions, norm=Preprocessing.total_intensity, pairs=None):
 
         columns = Defaults().labelsForLMM
@@ -490,8 +488,8 @@ class HypothesisTesting:
 
             pair.sort()
             print(pair)
-            temp = melted_Peptides[(melted_Peptides['variable'].str.contains(pair[0], regex=False)) | (
-                melted_Peptides['variable'].str.contains(pair[1], regex=False))]
+            temp = melted_Peptides[(melted_Peptides['variable'].str.fullmatch(pair[0])) | (
+                melted_Peptides['variable'].str.fullmatch(pair[1]))]
             temp['value'] = np.log2(temp['value'])
             temp = temp.dropna()
 
@@ -886,10 +884,20 @@ class Pipelines:
         return result
 
 class Multiprocessing:
+    '''
+    Prototype not stable
+    '''
     def __init__(self):
         pass
-    
+
     def singlefile_lmm(self, psms, conditions, number_of_processes=1, pairs=None, wd=None, filter=True, mode='save',fc_cutoff=0.5,p_cutoff=0.05, norm=Preprocessing.total_intensity):
+        print('Multiprocessing used')
+        print('Number of available cores:', os.cpu_count())
+        if number_of_processes > os.cpu_count():
+            print('Number of processes larger than available core count')
+            print('Using recommended core count:', os.cpu_count()/2)
+            number_of_processes = os.cpu_count()/2
+        
         defaults = Defaults()
         labels = defaults.labelsForLMM
         abundance_column = defaults.AbundanceColumn
@@ -910,9 +918,9 @@ class Multiprocessing:
             pass
         print('Peptide based linear models for differential expression')
         if norm is not None:
-            input_file = norm(Preprocessing, psms, channels)
+            psms = norm(Preprocessing, psms, channels)
         else:
-            input_file = psms.dropna(subset=channels)
+            psms = psms.dropna(subset=channels)
             print('No Normalization applied')
         
         gene_list = list(set(psms[defaults.MasterProteinAccession]))
@@ -987,13 +995,18 @@ def main():
         wd+"PSMs.txt", sep='\t', header=0)
     multi = Multiprocessing()
     conditions = ['0Mock','0Mock','0Mock','0Mock','0Mock','Salmonella','Salmonella','Salmonella','Salmonella','Salmonella']
-    
+    pipe = Pipelines()
     start = time.time()
-    result = multi.singlefile_lmm(psms, conditions,wd=wd,fc_cutoff=0.5,number_of_processes=6)
+    result = pipe.singlefile_lmm(psms, conditions,wd=wd,fc_cutoff=0.5)
     end= time.time()
     delta=end-start
-    print('Execution took %.2f seconds' % delta)
-    result.to_csv(wd+"Result_LMM_Multi.csv",line_terminator='\n')
+    print('Single Process Execution took %.2f seconds' % delta)
+    
+    start = time.time()
+    result = multi.singlefile_lmm(psms, conditions,number_of_processes=8,wd=wd,fc_cutoff=0.5)
+    end= time.time()
+    delta=end-start
+    print('Multiprocessing Execution took %.2f seconds' % delta)
 
 
 if __name__ == '__main__':
