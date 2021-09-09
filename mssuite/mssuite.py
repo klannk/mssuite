@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from statsmodels import formula
 import statsmodels.api as sm
 import statsmodels.formula.api as smf
 from scipy.stats import hypergeom, trim_mean, ttest_ind
@@ -79,7 +80,14 @@ class Preprocessing:
         mpa1 = Defaults.MasterProteinAccession
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
+        print('Removing shared peptides')
         input_file = input_file[~input_file[mpa].str.contains(';', na=False)]
+        print('Checking isoforms')
+        try:
+            input_file[[Defaults.MasterProteinAccession,'Isoform']] = input_file[Defaults.MasterProteinAccession].str.split('-', expand=True)
+        except ValueError:
+            pass
+        print('Removing contaminants')
         input_file = input_file[input_file['Contaminant'] == False]
         return input_file
 
@@ -92,12 +100,13 @@ class Preprocessing:
         for index in input_file.index:
             input_file.loc[index,Defaults.file_id] = input_file.loc[index,Defaults.file_id].split('.')[0]
         '''
-        
-        input_file[[Defaults.file_id,'Fraction']] = input_file[Defaults.file_id].str.split('.', expand=True)
-        
+        try:
+            input_file[[Defaults.file_id,'Fraction']] = input_file[Defaults.file_id].str.split('.', expand=True)
+        except ValueError:
+            pass
         grouped_input = input_file.groupby(
             by=Defaults.file_id)  # groupby files
-
+        print(list(grouped_input.groups.keys()))
         # split dataframe into list of dataframes
         arrayofdataframes = [grouped_input.get_group(
             x) for x in grouped_input.groups]
@@ -129,7 +138,7 @@ class Preprocessing:
             else:
                 pass
         print(Defaults.MasterProteinAccession)
-        Input1 = input_list[0].join(input_list[1:], how='inner')
+        Input1 = input_list[0].join(input_list[1:], how='outer')
         print("Done")
         return Input1
 
@@ -138,7 +147,7 @@ class Preprocessing:
         #Performs Median normalisation. Besides input file the function needs an array of all
         column names that contain the quantifications to be normalized (channels).
         '''
-        input_file = input_file.dropna(subset=channels)
+        #input_file = input_file.dropna(subset=channels)
         print("Median Normalization")
         minimum = np.argmin(input_file[channels].median().values)
         summed = np.array(input_file[channels].median().values)
@@ -155,7 +164,7 @@ class Preprocessing:
         column names that contain the quantifications to be normalized (channels).
         '''
         # remove missing value rows
-        input_file = input_file.dropna(subset=channels)
+        #input_file = input_file.dropna(subset=channels)
         print("Normalization")
         # calculate summed intensity for each column and search minimum index
         minimum = np.argmin(input_file[channels].sum().values)
@@ -172,7 +181,7 @@ class Preprocessing:
     def TMM(self, input_file, channels):
         '''This function implements TMM normalisation (Robinson & Oshlack, 2010, Genome Biology).
         '''
-        input_file = input_file.dropna(subset=channels)
+        #input_file = input_file.dropna(subset=channels)
         # Trim the 5% Quantiles from dataset
         input_trim = input_file[input_file[channels]
                                 < input_file[channels].quantile(.95)]
@@ -209,7 +218,7 @@ class Preprocessing:
             input_file=input_file, custom=abundance_column)
         print(channels)
         # remove missing values from input
-        input_file = input_file.dropna(subset=channels)
+        #input_file = input_file.dropna(subset=channels)
         # search for bridge channels
         bridge_channels = [i for i in channels if str(bridge) in i]
         # calculate mean of all bridge channels
@@ -223,7 +232,7 @@ class Preprocessing:
             norms = np.array(cfs[cfs_cols[i]])
             input_file[chunks_channels[i]
                        ] = input_file[chunks_channels[i]].divide(norms, axis=0)
-        input_file = input_file.dropna(subset=channels)
+        #input_file = input_file.dropna(subset=channels)
         print('Done')
         return input_file
 
@@ -233,22 +242,19 @@ class Preprocessing:
         abundance_column = defaults.AbundanceColumn
         channels = defaults.get_channels(
             input_file=input_file, custom=abundance_column)
-        input_file = input_file.dropna(subset=channels)
+        #input_file = input_file.dropna(subset=channels)
         mean_columns = [x for x in input_file.columns if 'Row_Mean' in x]
         mean_mean = np.array(input_file[mean_columns].mean(axis=1))
         norm_factors = input_file[mean_columns].divide(mean_mean, axis=0)
-        print(norm_factors)
         norm_cols = norm_factors.columns
-        print(input_file[channels])
         chunks_channels = list(self.chunks(
             channels, int(len(channels)/plexes)))
         for i in range(0, len(chunks_channels), 1):
             norms = np.array(norm_factors[norm_cols[i]])
             input_file[chunks_channels[i]
                        ] = input_file[chunks_channels[i]].divide(norms, axis=0)
-        print(input_file[channels])
 
-        input_file = input_file.dropna(subset=channels)
+        #input_file = input_file.dropna(subset=channels)
         print('Done')
         return input_file
 
@@ -257,17 +263,24 @@ class Annotation:
     def __init__(self):
         pass
 
-    def basic_annotation(self, input_file,pipe=False):
+    def basic_annotation(self, input_file,pipe=False, species='human',include_sequence=False):
         '''
         Performs basic annotation and adds Gene symbols, protein names, taxonomy and MW to the df. The
         DFs index needs to be the accession. So far only for human proteins.
         '''
 
         # Reads annotation file
-
-        database = pd.read_csv(os.path.join(
-            dirname, '../data/Annotation_data_human.txt'), sep='\t', header=0)
-        database.index = database['Entry']
+        if species == 'human':
+            database = pd.read_csv(os.path.join(
+                dirname, '../data/Annotation_data_human.txt'), sep='\t', header=0)
+            database.index = database['Entry']
+        elif species == 'mouse':
+            database = pd.read_csv(os.path.join(
+                dirname, '../data/Annotation_data_mouse.txt'), sep='\t', header=0)
+            database.index = database['Entry']
+        else:
+            print('Species not in database')
+            return input_file
 
         # Iterate over entries in input file and write annotations
         line = 0
@@ -283,7 +296,13 @@ class Annotation:
                                 'Protein_Name'] = database.loc[index, 'Protein names']
                     input_file.loc[i,
                                 'Organism'] = database.loc[index, 'Organism']
-                    input_file.loc[i, 'Mass'] = database.loc[index, 'Mass']
+                    input_file.loc[i, 'Gene ontology (biological process)'] = database.loc[index, 'Gene ontology (biological process)']
+                    input_file.loc[i, 'Gene ontology (cellular component)'] = database.loc[index, 'Gene ontology (cellular component)']
+                    input_file.loc[i, 'Gene ontology (molecular function)'] = database.loc[index, 'Gene ontology (molecular function)']
+                    if include_sequence == True:
+                        input_file.loc[i, 'Sequence'] = database.loc[index, 'Sequence']
+                    else:
+                        pass
                 except KeyError:
                     pass
                 line = line+1
@@ -297,7 +316,13 @@ class Annotation:
                                 'Protein_Name'] = database.loc[index, 'Protein names']
                     input_file.loc[i,
                                 'Organism'] = database.loc[index, 'Organism']
-                    input_file.loc[i, 'Mass'] = database.loc[index, 'Mass']
+                    input_file.loc[i, 'Gene ontology (biological process)'] = database.loc[index, 'Gene ontology (biological process)']
+                    input_file.loc[i, 'Gene ontology (cellular component)'] = database.loc[index, 'Gene ontology (cellular component)']
+                    input_file.loc[i, 'Gene ontology (molecular function)'] = database.loc[index, 'Gene ontology (molecular function)']
+                    if include_sequence == True:
+                        input_file.loc[i, 'Sequence'] = database.loc[index, 'Sequence']
+                    else:
+                        pass
                 except KeyError:
                     pass
                 line = line+1
@@ -445,17 +470,19 @@ class HypothesisTesting:
                 result.append([source[p1], source[p2]])
         return result
 
-     
-    def peptide_based_lmm(self, input_file, conditions, norm=Preprocessing.total_intensity, pairs=None):
+     #TODO Implement technical replicate and multiple plex support
+    def peptide_based_lmm(self, input_file, conditions,drop_missing=False, techreps=None, plexes=None, norm=Preprocessing.total_intensity, pairs=None):
 
         columns = Defaults().labelsForLMM
         self.pair_names = []
         channels = [col for col in input_file.columns if columns[2] in col]
-        print(channels)
         if norm is not None:
             input_file = norm(Preprocessing, input_file, channels)
         else:
-            input_file = input_file.dropna(subset=channels)
+            if drop_missing == True:
+                input_file = input_file.dropna(subset=channels)
+            else:
+                pass
             print('No Normalization applied')
         # Protein level quantifications
         roll = Rollup()
@@ -476,8 +503,25 @@ class HypothesisTesting:
         melted_Peptides = Peptides_for_LM.melt(
             id_vars=['Accession', 'Sequence'], value_vars=channels)
         # Replace column names with conditions
-        melted_Peptides.replace(to_replace=channels,
-                                value=conditions, inplace=True)
+        
+        
+        if  techreps == None:
+            pass
+        else:
+            melted_Peptides['Techreps']=melted_Peptides['variable']
+            melted_Peptides['Techreps'].replace(to_replace=channels,
+                                value=techreps, inplace=True)
+        
+        if  plexes == None:
+            pass
+        else:
+            melted_Peptides['Multiplex']=melted_Peptides['variable']
+            melted_Peptides['Multiplex'].replace(to_replace=channels,
+                                value=plexes, inplace=True)
+
+        print(len(melted_Peptides.index))
+        melted_Peptides['variable'].replace(to_replace=channels,
+                                value=conditions, inplace=True)    
         unique_conditions = list(set(conditions))
         if pairs == None:
             pairs = self.tessa(unique_conditions)
@@ -501,12 +545,29 @@ class HypothesisTesting:
 
                 temp2 = grouped.get_group(i)
                 vc = {'Sequence': '0+Sequence'}
+                #Base model
+                model_form = "value ~ variable"
+                #Extent model based on data
+                if techreps is not None:
+                    
+                    vc['Techreps'] = '0+C(Techreps)'
+                else:
+                    pass
+                
+            
+                if plexes is not None:
+                    
+                    vc['Multiplex'] = '0+C(Multiplex)'
+                else:
+                    pass
+                
                 model = smf.mixedlm(
-                    "value ~ variable", temp2, groups='Sequence', vc_formula=vc)
+                    model_form, temp2, groups='Sequence', vc_formula=vc)
                 try:
                     result = model.fit()
                     if counter == 0:
-                        # print(result.summary())
+                        print(model_form)
+                        print(result.summary())
                         counter = counter + 1
                     else:
                         pass
@@ -892,7 +953,7 @@ class Multiprocessing:
 
     def singlefile_lmm(self, psms, conditions, number_of_processes=1, pairs=None, wd=None, filter=True, mode='save',fc_cutoff=0.5,p_cutoff=0.05, norm=Preprocessing.total_intensity):
         print('Multiprocessing used')
-        print('Number of available cores:', os.cpu_count())
+        print('Number of available (virtual) cores:', os.cpu_count())
         if number_of_processes > os.cpu_count():
             print('Number of processes larger than available core count')
             print('Using recommended core count:', os.cpu_count()/2)
@@ -987,26 +1048,25 @@ class Multiprocessing:
 
 def main():
     # Testing process for pipelines
-    import time
-    
-    defaults=Defaults()
-    wd = 'C://Users/Kevin/Desktop/PhD/MassSpec/Salmonella_Test_MEF/'
-    psms = pd.read_csv(
-        wd+"PSMs.txt", sep='\t', header=0)
-    multi = Multiprocessing()
-    conditions = ['0Mock','0Mock','0Mock','0Mock','0Mock','Salmonella','Salmonella','Salmonella','Salmonella','Salmonella']
-    pipe = Pipelines()
-    start = time.time()
-    result = pipe.singlefile_lmm(psms, conditions,wd=wd,fc_cutoff=0.5)
-    end= time.time()
-    delta=end-start
-    print('Single Process Execution took %.2f seconds' % delta)
-    
-    start = time.time()
-    result = multi.singlefile_lmm(psms, conditions,number_of_processes=8,wd=wd,fc_cutoff=0.5)
-    end= time.time()
-    delta=end-start
-    print('Multiprocessing Execution took %.2f seconds' % delta)
+    psms = pd.read_excel("C://Users/kevin/Desktop/PhD/MassSpec/2018_Coli/20191010_KKL_Coli_01_Mix1_PSM.xlsx",engine='openpyxl',header=0)
+    psms2 = pd.read_excel("C://Users/kevin/Desktop/PhD/MassSpec/2018_Coli/20191010_KKL_Coli_01_Mix2_PSM.xlsx",engine='openpyxl',header=0)
+    psms3 = pd.read_excel("C://Users/kevin/Desktop/PhD/MassSpec/2018_Coli/20191010_KKL_Coli_01_Mix3_PSM.xlsx",engine='openpyxl',header=0)
+
+    defaults = Defaults()
+    process = Preprocessing()
+    hypo = HypothesisTesting()
+    channels = defaults.get_channels(
+            psms)
+    psm_dfs = [psms,psms2,psms3]
+    psm_dfs = defaults.processor(psm_dfs, process.filter_peptides)
+    psm_dfs = defaults.processor(psm_dfs, process.total_intensity, channels)
+    data = process.psm_joining(psm_dfs)
+    IRS_df = process.IRS_normalisation(data,'126',3)
+    conditions = ['Empty','Control','Control','Control','Mix1','Mix1','Mix1','Mix2','Mix2','Mix2','Bridge','Empty','Control','Control','Control','Mix1','Mix1','Mix1','Mix2','Mix2','Mix2','Bridge','Empty','Control','Control','Control','Mix1','Mix1','Mix1','Mix2','Mix2','Mix2','Bridge']
+    techreps = ['1','1','1','1','1','1','1','1','1','1','1','2','2','2','2','2','2','2','2','2','2','2','3','3','3','3','3','3','3','3','3','3','3']
+    pairs=[['Control','Mix1'],['Control','Mix2']]
+    result = hypo.peptide_based_lmm(IRS_df,conditions=conditions, plexes=techreps, pairs=pairs)
+
 
 
 if __name__ == '__main__':
