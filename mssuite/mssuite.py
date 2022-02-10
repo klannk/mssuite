@@ -30,9 +30,13 @@ from scipy.stats import hypergeom, trim_mean, ttest_ind
 from statsmodels.formula.api import ols
 from statsmodels.stats.multitest import multipletests
 import concurrent.futures as futures
+
+
 warnings.filterwarnings("ignore")
 mpl.style.use('tableau-colorblind10')
 dirname = os.path.dirname(__file__)
+
+#TODO inherit Defaults class to __init__ of other classes. 
 
 class Defaults:
     '''
@@ -40,14 +44,16 @@ class Defaults:
     can be set manually. To use this package with input files other than Proteome Discoverer, initialise a instance of Defaults and set
     the column names according to your data layout.
     '''
-    MasterProteinAccession = "Master Protein Accessions"
-    labelsForLMM = [
-        'Annotated Sequence',
-        'Master Protein Accessions',
-        'Abundance:',
-    ]
-    AbundanceColumn = "Abundance:"
-    file_id = "File ID"
+    def __init__(self) -> None:
+        
+        self.MasterProteinAccession = "Master Protein Accessions"
+        self.sequence = 'Annotated Sequence'
+        self.AbundanceColumn = "Abundance:"
+        self.file_id = "File ID"
+        self.contaminant = 'Contaminant'
+        self.modifications = "Modifications"
+        
+
 
     def processor(self, list_of_df, function, *args, **kwargs):
         '''Processor function that applies a certain function to a list of dataframes, to allow rapid batch processing.
@@ -70,25 +76,26 @@ class Defaults:
         return channels
 
 class Preprocessing:
-    def __init__(self):
-        pass
+    def __init__(self, defaults=Defaults()):
 
+        self.defaults = defaults
+        
     def filter_peptides(self, input_file):
         '''
         Filters peptide files for non-unique peptides and contaminant proteins
         '''
-        mpa1 = Defaults.MasterProteinAccession
+        mpa1 = self.defaults.MasterProteinAccession
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
         print('Removing shared peptides')
         input_file = input_file[~input_file[mpa].str.contains(';', na=False)]
         print('Checking isoforms')
         try:
-            input_file[[Defaults.MasterProteinAccession,'Isoform']] = input_file[Defaults.MasterProteinAccession].str.split('-', expand=True)
+            input_file[[self.defaults.MasterProteinAccession,'Isoform']] = input_file[self.defaults.MasterProteinAccession].str.split('-', expand=True)
         except ValueError:
             pass
         print('Removing contaminants')
-        input_file = input_file[input_file['Contaminant'] == False]
+        input_file = input_file[input_file[self.defaults.contaminant] == False]
         return input_file
 
     def psm_splitting(self, input_file):
@@ -101,11 +108,11 @@ class Preprocessing:
             input_file.loc[index,Defaults.file_id] = input_file.loc[index,Defaults.file_id].split('.')[0]
         '''
         try:
-            input_file[[Defaults.file_id,'Fraction']] = input_file[Defaults.file_id].str.split('.', expand=True)
+            input_file[[self.defaults.file_id,'Fraction']] = input_file[self.defaults.file_id].str.split('.', expand=True)
         except ValueError:
             pass
         grouped_input = input_file.groupby(
-            by=Defaults.file_id)  # groupby files
+            by=self.defaults.file_id)  # groupby files
         print(list(grouped_input.groups.keys()))
         # split dataframe into list of dataframes
         arrayofdataframes = [grouped_input.get_group(
@@ -119,9 +126,9 @@ class Preprocessing:
 
             # print(input_list[idx].index)
             channels = [
-                col for col in input_list[idx].columns if "Abundance:" in col]
-            input_list[idx]['Identifier'] = input_list[idx]['Annotated Sequence'].map(
-                str) + input_list[idx]['Modifications']
+                col for col in input_list[idx].columns if self.defaults.AbundanceColumn in col]
+            input_list[idx]['Identifier'] = input_list[idx][self.defaults.sequence].map(
+                str) + input_list[idx][self.defaults.modifications]
 
             input_list[idx][channels] = input_list[idx].groupby(
                 ['Identifier'])[channels].transform('median')
@@ -134,19 +141,20 @@ class Preprocessing:
             input_list[idx] = input_list[idx].add_suffix(idx)
             # print(input_list[idx].index)
             if idx == 0:
-                Defaults.MasterProteinAccession = Defaults.MasterProteinAccession + str(idx)
+                self.MasterProteinAccession = self.MasterProteinAccession + str(idx)
             else:
                 pass
-        print(Defaults.MasterProteinAccession)
+        print(self.MasterProteinAccession)
         Input1 = input_list[0].join(input_list[1:], how='outer')
         print("Done")
         return Input1
 
-    def median_normalisation(self, input_file, channels):
+    def median_normalisation(self, input_file):
         '''
         #Performs Median normalisation. Besides input file the function needs an array of all
         column names that contain the quantifications to be normalized (channels).
         '''
+        channels = self.defaults.get_channels(input_file)
         #input_file = input_file.dropna(subset=channels)
         print("Median Normalization")
         minimum = np.argmin(input_file[channels].median().values)
@@ -158,7 +166,7 @@ class Preprocessing:
         print("Normalization done")
         return input_file
 
-    def total_intensity(self, input_file, channels):
+    def total_intensity(self, input_file):
         '''
         #Performs total intensity normalisation. Besides input file the function needs an array of all
         column names that contain the quantifications to be normalized (channels).
@@ -166,6 +174,7 @@ class Preprocessing:
         # remove missing value rows
         #input_file = input_file.dropna(subset=channels)
         print("Normalization")
+        channels = self.defaults.get_channels(input_file)
         # calculate summed intensity for each column and search minimum index
         minimum = np.argmin(input_file[channels].sum().values)
         summed = np.array(input_file[channels].sum().values)
@@ -178,11 +187,12 @@ class Preprocessing:
         print("Normalization done")
         return input_file
 
-    def TMM(self, input_file, channels):
+    def TMM(self, input_file):
         '''This function implements TMM normalisation (Robinson & Oshlack, 2010, Genome Biology).
         '''
         #input_file = input_file.dropna(subset=channels)
         # Trim the 5% Quantiles from dataset
+        channels = self.defaults.get_channels(input_file)
         input_trim = input_file[input_file[channels]
                                 < input_file[channels].quantile(.95)]
         print("TMM Normalization")
@@ -212,9 +222,8 @@ class Preprocessing:
         print('Internal Reference scaling')
         
         # search for quantification columns
-        defaults = Defaults()
-        abundance_column = defaults.AbundanceColumn
-        channels = defaults.get_channels(
+        abundance_column = self.defaults.AbundanceColumn
+        channels = self.defaults.get_channels(
             input_file=input_file, custom=abundance_column)
         print(channels)
         # remove missing values from input
@@ -238,9 +247,9 @@ class Preprocessing:
 
     def global_average_scaling(self, input_file, plexes):
         
-        defaults = Defaults()
-        abundance_column = defaults.AbundanceColumn
-        channels = defaults.get_channels(
+       
+        abundance_column = self.defaults.AbundanceColumn
+        channels = self.defaults.get_channels(
             input_file=input_file, custom=abundance_column)
         #input_file = input_file.dropna(subset=channels)
         mean_columns = [x for x in input_file.columns if 'Row_Mean' in x]
@@ -260,8 +269,8 @@ class Preprocessing:
 
 class Annotation:
     # all functions related to annotation of protein/peptide files
-    def __init__(self):
-        pass
+    def __init__(self, defaults=Defaults()):
+        self.defaults=defaults
 
     def basic_annotation(self, input_file,pipe=False, species='human',include_sequence=False):
         '''
@@ -284,7 +293,7 @@ class Annotation:
 
         # Iterate over entries in input file and write annotations
         line = 0
-        defaults = Defaults()
+        
         if pipe == True:
 
             for index in input_file.index:
@@ -307,7 +316,7 @@ class Annotation:
                     pass
                 line = line+1
         else:
-            for index in input_file[defaults.MasterProteinAccession]:
+            for index in input_file[self.defaults.MasterProteinAccession]:
                 i = input_file.index[line]
                 try:
                     input_file.loc[i,
@@ -329,8 +338,8 @@ class Annotation:
         return input_file
 
 class Rollup:
-    def __init__(self):
-        pass
+    def __init__(self, defaults=Defaults()):
+        self.defaults=defaults
 
     def protein_rollup_sum(self, input_file, channels):
         '''
@@ -344,8 +353,8 @@ class Rollup:
 
         Returns Protein level DF.
         '''
-        defaults = Defaults()
-        mpa1  =defaults.MasterProteinAccession
+       
+        mpa1 =self.defaults.MasterProteinAccession
         print('Calculate Protein quantifications from PSM')
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
@@ -375,7 +384,7 @@ class Rollup:
 
         Returns Protein level DF.
         '''
-        mpa1 = Defaults().MasterProteinAccession
+        mpa1 = self.defaults.MasterProteinAccession
         print('Calculate Protein quantifications from PSM')
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
@@ -405,7 +414,7 @@ class Rollup:
 
         Returns Protein level DF.
         '''
-        mpa1 = Defaults().MasterProteinAccession
+        mpa1 = self.defaults.MasterProteinAccession
         print('Calculate Protein quantifications from PSM')
         mpa = [col for col in input_file.columns if mpa1 in col]
         mpa = mpa[0]
@@ -426,9 +435,10 @@ class Rollup:
 class HypothesisTesting:
     # Calculate two-sided t-test statistics for pairwise comparisons
 
-    def __init__(self):
+    def __init__(self, defaults = Defaults()):
         self.pair_names = []
         self.comparison_data = {}
+        self.defaults=defaults
 
     def t_test(self, input_data, matrix1, matrix2, name=''):
         '''Calculates p values and corrected p values (q values, BH-FDR) according to a students t-test (two-sided) for each row/protein in a dataframe. Needs column names for the two matrices as arrays.
@@ -470,14 +480,18 @@ class HypothesisTesting:
                 result.append([source[p1], source[p2]])
         return result
 
-     #TODO Implement technical replicate and multiple plex support
     def peptide_based_lmm(self, input_file, conditions,drop_missing=False, techreps=None, plexes=None, norm=Preprocessing.total_intensity, pairs=None):
-
-        columns = Defaults().labelsForLMM
+       
+        columns =  [
+            self.defaults.sequence,
+            self.defaults.MasterProteinAccession,
+            self.defaults.AbundanceColumn,
+        ]
         self.pair_names = []
         channels = [col for col in input_file.columns if columns[2] in col]
+        
         if norm is not None:
-            input_file = norm(Preprocessing, input_file, channels)
+            input_file = norm(Preprocessing(self.defaults), input_file, channels)
         else:
             if drop_missing == True:
                 input_file = input_file.dropna(subset=channels)
@@ -485,7 +499,7 @@ class HypothesisTesting:
                 pass
             print('No Normalization applied')
         # Protein level quantifications
-        roll = Rollup()
+        roll = Rollup(self.defaults)
         protein_data = roll.protein_rollup_sum(
             input_file=input_file, channels=channels)
         # Prepare Peptide data for LMM
@@ -519,7 +533,7 @@ class HypothesisTesting:
             melted_Peptides['Multiplex'].replace(to_replace=channels,
                                 value=plexes, inplace=True)
 
-        print(len(melted_Peptides.index))
+        print('Total Number of Datapoints: ', len(melted_Peptides.index))
         melted_Peptides['variable'].replace(to_replace=channels,
                                 value=conditions, inplace=True)    
         unique_conditions = list(set(conditions))
@@ -567,7 +581,7 @@ class HypothesisTesting:
                     result = model.fit()
                     if counter == 0:
                         print(model_form)
-                        print(result.summary())
+                        #print(result.summary())
                         counter = counter + 1
                     else:
                         pass
@@ -591,13 +605,60 @@ class HypothesisTesting:
 
             result_df_peptides_LMM['q_value'] = pvals_corrected
 
-            comparison = str(pair[0]) + '_' + str(pair[1])
+            comparison = '_' + str(pair[1]) + '_vs_' + str(pair[0])
             self.pair_names.append(comparison)
             result_df_peptides_LMM = result_df_peptides_LMM.add_suffix(
                 comparison)
             protein_data = protein_data.join(result_df_peptides_LMM)
         self.comparison_data = self.export_comparison_strings()
         return protein_data
+
+    def peptide_based_lmm_multicore(self, input_file, conditions,number_of_processes=os.cpu_count(),drop_missing=False, techreps=None, plexes=None, pairs=None):
+        psms=input_file
+        gene_list = list(set(input_file[self.defaults.MasterProteinAccession]))
+        n_size = round(len(gene_list)/number_of_processes)
+        accession_splits = list(Preprocessing(self.defaults).chunks(gene_list, n_size))
+        temp_dfs = []
+        for i in range(len(accession_splits)):
+            temp = psms[psms[self.defaults.MasterProteinAccession].isin(values=accession_splits[i])]
+            temp_dfs.append(temp)
+        results=[]
+        unique_conditions = list(set(conditions))
+        if pairs == None:
+            pairs = self.tessa(unique_conditions)
+        else:
+            pass
+        for pair in pairs:
+            pair.sort()
+            comparison = '_' + str(pair[1]) + '_vs_' + str(pair[0])
+            self.pair_names.append(comparison)
+            
+
+        with futures.ProcessPoolExecutor(max_workers=number_of_processes) as executor:
+            future_to_df = {executor.submit(self.peptide_based_lmm,df,conditions, pairs=pairs,norm=None,drop_missing=drop_missing,techreps=techreps,plexes=plexes): df for df in temp_dfs}
+            counter=0
+            for future in futures.as_completed(future_to_df):
+                counter = counter + 1
+                result = future_to_df[future]
+                try:
+                    data = future.result()
+                    results.append(data)
+                except Exception as exc:
+                    print(exc)
+                else:
+                    pass
+
+        for i in range(len(results)):
+            if i == 0:
+                pass
+            else:
+                results[0]=results[0].append(results[i])
+                print(len(results[0]))
+        result = results[0]
+        del results, temp_dfs
+        self.comparison_data = self.export_comparison_strings()
+        return result
+
 
     def get_comparisons(self):
         '''Returns all comparisons that have been performed on that dataframe for further use. 
@@ -640,17 +701,18 @@ class HypothesisTesting:
             genes_up = list(upregulated.index)
             genes_down = list(downregulated.index)
         else:
-            genes_up = list(upregulated[Defaults.MasterProteinAccession])
-            genes_down = list(downregulated[Defaults.MasterProteinAccession])
+            genes_up = list(upregulated[self.defaults.MasterProteinAccession])
+            genes_down = list(downregulated[self.defaults.MasterProteinAccession])
         data = {'up': genes_up, 'down': genes_down}
         return data
 
 class PathwayEnrichment:
-    def __init__(self):
+    def __init__(self,defaults=Defaults()):
         print("Pathway Enrichment Initialized")
         self.database = None
         self.counts = None
         self.total = 0
+        self.defaults = defaults
 
     def get_background_sizes(self, background=list, all_levels=False):
         '''Calculates the occurances of pathways in a custom background list and writes them to class variable for further use in enrichment calculation. The list should contain unique genes, otherwise it will distort the 
@@ -760,15 +822,20 @@ class PathwayEnrichment:
 
 class Visualization:
     # TODO add volcano plots and heatmaps for pipeline output
-    def __init__(self):
-        pass
+    def __init__(self,defaults=Defaults()):
+        self.defaults=defaults
 
-    def volcano_plot(self, input_file, fold_change, pval, comparison, wd, mode='show',fc_line=0.5,p_line=0.05):
+    def volcano_plot(self, input_file, hypo, comparison, wd, mode='show',fc_line=0.5,p_line=0.05,use_q=True):
         '''Produces a volcano plot and saves/shows it.
         '''
         temp = input_file.copy()
-
+        
+        fold_change, pval, q = hypo.get_columnnames_for_comparison(comparison)
         # For visualization purpose
+        if use_q:
+            pval = q
+        else:
+            pass
         temp[pval] = np.where(temp[pval] < 0.000000001,
                               0.000000001, temp[pval])
         temp['coloring'] = 1-np.log(temp[pval]) + abs(temp[fold_change]) * 5
@@ -792,9 +859,10 @@ class Visualization:
             plt.show()
         plt.close()
 
-    def boxplots(self, input_file, channels, wd, mode='show'):
+    def boxplots(self, input_file, wd, mode='show'):
         '''Produces boxplots of all columns specified in the channels argument. E.g. for quality control.
         '''
+        channels = self.defaults.get_channels(input_file)
         fig = sns.boxplot(data=input_file[channels], showfliers=False)
         plt.yscale('log')
         plt.xticks(rotation=90)
@@ -808,9 +876,10 @@ class Visualization:
             plt.show()
         plt.close()
 
-    def heatmap(self, input_file, channels, conditions, wd, mode='show'):
+    def heatmap(self, input_file, conditions, wd, mode='show'):
         '''Produces a clustered heatmap from all input columns specified in the channels argument and labels them according to the conditions argument.
         '''
+        channels = self.defaults.get_channels(input_file)
         temp = input_file[channels].dropna().copy()
         fig = sns.clustermap(
             data=temp[channels], z_score=0, xticklabels=conditions, yticklabels=False)
@@ -826,17 +895,16 @@ class Pipelines:
 
     def singlefile_lmm(self, psms, conditions, pairs=None, wd=None, filter=True, mode='save',fc_cutoff=0.5,p_cutoff=0.05):
         defaults = Defaults()
-        labels = defaults.labelsForLMM
-        abundance_column = defaults.AbundanceColumn
-        process = Preprocessing()
-        hypo = HypothesisTesting()
-        annot = Annotation()
-        vis = Visualization()
-        path = PathwayEnrichment()
+
+        process = Preprocessing(defaults)
+        hypo = HypothesisTesting(defaults)
+        annot = Annotation(defaults)
+        vis = Visualization(defaults)
+        path = PathwayEnrichment(defaults)
         print("Initialized")
 
         channels = defaults.get_channels(
-            psms, custom=abundance_column)  # Get channel nammes
+            psms)  # Get channel nammes
 
         if filter == True:
             print('Filtering')
@@ -881,16 +949,14 @@ class Pipelines:
     def multifile_lmm(self, psms, conditions, bridge, pairs=None, wd=None, filter=True, mode='save',fc_cutoff=0.5,p_cutoff=0.05):
 
         defaults = Defaults()
-        labels = defaults.labelsForLMM
-        abundance_column = defaults.AbundanceColumn
-        process = Preprocessing()
-        hypo = HypothesisTesting()
-        annot = Annotation()
-        vis = Visualization()
-        path = PathwayEnrichment()
+        process = Preprocessing(defaults)
+        hypo = HypothesisTesting(defaults)
+        annot = Annotation(defaults)
+        vis = Visualization(defaults)
+        path = PathwayEnrichment(defaults)
         print("Initialized")
         channels = defaults.get_channels(
-            psms, custom=abundance_column)  # Get channel nammes
+            psms)  # Get channel nammes
         if filter == True:
             print('Filtering')
             psms = process.filter_peptides(psms)
@@ -946,7 +1012,7 @@ class Pipelines:
 
 class Multiprocessing:
     '''
-    Prototype not stable
+    DEPRECATED Testing environment NOT STABLE
     '''
     def __init__(self):
         pass
@@ -960,8 +1026,6 @@ class Multiprocessing:
             number_of_processes = os.cpu_count()/2
         
         defaults = Defaults()
-        labels = defaults.labelsForLMM
-        abundance_column = defaults.AbundanceColumn
         process = Preprocessing()
         hypo = HypothesisTesting()
         annot = Annotation()

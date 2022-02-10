@@ -2,6 +2,16 @@
 
 The mssuite python package provides a framework for streamlined data analysis of TMT based shotgun proteomics data. The package is of modular nature and besides already implemented pipelines you can easily build your one data analysis pipeline, including automated plots. The package defaults to PSM/Peptide output files from ProteomeDiscoverer Software. However, it is easily customizable to your input files, by changing a few parameters.
 
+## Important
+
+**Patch Notes 1.4:** 
+
+All classes accept a Defaults object during initialisation. Otherwise a native Defaults object is created with the default values. If you change the class variables in an initilized object, pass it to the other classes during init.
+
+mssuite 1.4 now contains a peptide_based_lmm_multicore method. This method uses multiprocessing to speed up the data analysis significantly. You can set the number of used cores manually or the function will detect the number of available cores automatically.
+
+
+
 # Examples
 
 In the filder "Examples" in this repository you will find Jupyter notebooks showing basic workflows using the mssuite package. It also contains example data to reproduce the example workflows.

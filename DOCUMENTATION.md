@@ -3,6 +3,18 @@
 ## Defaults 
 
 The mssuite package locates the needed columns in the input dataframe by a string/label based approach. It searches the column names for matching strings and uses them in the downstream analysis. This object contains PD specific default names for columns. The other modules in the package will access this object to derive the needed column names.
+**Important: from version 1.4 on initilize the defaults class and change the labels according to your data if needed. Then give the defaults class object as an argument to each other class initialized. Otherwise the other classes internally init a new instance and use the default values from PD.** 
+
+Example:
+```python
+defaults = Defaults()
+#Change variables here
+process = Preprocessing(defaults) # this ensures that the changed variables are inherited to the other classes.
+hypo = HypothesisTesting(defaults)
+.
+.
+.
+```
 
 ### Class variables
 
@@ -13,10 +25,10 @@ Defaults.MasterProteinAccession = "Master Protein Accessions"
 This variable contains the default string that is used to extract the protein identifiers used in all downstream analysis.
 
 ```python
-Defaults.labelsForLMM = ['Annotated Sequence','Master Protein Accessions','Abundance:']
+Defaults.sequence = 'Annotated Sequence']
 ```
 
-This variable contains the needed column labels for the peptide based models. If you change it, please provide the names in the following order: 1. Peptide based identifier (Sequence or something similar), 2. Identifier on protein level (e.g. UniProt Accession or Gene Name) and 3. A string that is shared by all intensity/abundance containing columns.
+This variable contains the Peptide based unique identifier such as the Sequence or a Sequence+Modification.
 
 ```python
 Defaults.AbundanceColumn = "Abundance:"
@@ -29,6 +41,17 @@ Defaults.file_id = "File ID"
 ```
 
 If your PSM file contains PSMs and quantifications from multiple files that need to be splitted then this variable contains the column name string for the file ID. Is used by `Preprocessing.psm_splitting`.
+
+```python
+Defaults.contaminant = "Contaminant"
+```
+This varaible contains the column name for the marking of the contaminants if applicable.
+
+```python
+Defaults.modifications = "Modifications"
+```
+Contains the modification column if applicable.
+
 
 ### Methods
 
@@ -244,7 +267,25 @@ Performs gene-wise linear mixed modelling for differential expression on peptide
 - `input_file`: _dataframe_ Input data
 - `conditions`: _array_ of treatment conditions matching the order of the quantification columns. E.g. `['Control','Treatment','Control','Treatment']`
 - `norm`: _function_, normalisation function of the Preprocessing module. If no normalisation should be applied set to `None`
+- `drop_missin`: Usage of Peptides containing missing values, default = False.
+- `tech_reps`:  _array_ of technical replicate ids, if applciable, matching the order of the quantification columns E.g. `['1','2','1','2']`
+- `plexes`: _array_ of multiplex identity, if applciable, matching the order of the quantification columns E.g. `['1','1','2','2']` Used when multiple MS runs are analysed.
 - `pairs`: _array_, optional. Nested array containing pairs that should be tested for differential analysis. E.g.`[['Control','Treatment1'],['Control','Treatment2']]`. If None, performs analysis for all possible pairs.
+- **Returns**: _dataframe_
+
+``python
+HypothesisTesting.peptide_based_lmm_multicore(self, input_file, conditions,number_of_processes=os.cpu_count(),drop_missing=False, techreps=None, plexes=None, pairs=None)
+```
+
+Performs gene-wise linear mixed modelling for differential expression on peptide level. Note that due to technical reasons no internal normalization can be applied, thus data has to be normed before.
+
+- `input_file`: _dataframe_ Input data
+- `conditions`: _array_ of treatment conditions matching the order of the quantification columns. E.g. `['Control','Treatment','Control','Treatment']`
+- `drop_missin`: Usage of Peptides containing missing values, default = False.
+- `tech_reps`:  _array_ of technical replicate ids, if applciable, matching the order of the quantification columns E.g. `['1','2','1','2']`
+- `plexes`: _array_ of multiplex identity, if applciable, matching the order of the quantification columns E.g. `['1','1','2','2']` Used when multiple MS runs are analysed.
+- `pairs`: _array_, optional. Nested array containing pairs that should be tested for differential analysis. E.g.`[['Control','Treatment1'],['Control','Treatment2']]`. If None, performs analysis for all possible pairs.
+- `number_of_processes`: Number of cores used during analysis. Default is max.
 - **Returns**: _dataframe_
 
 ```python
