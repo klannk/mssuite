@@ -137,14 +137,14 @@ class Preprocessing:
             input_list[idx].index = input_list[idx]['Identifier']
             input_list[idx]['Row_Mean'] = input_list[idx][channels].mean(axis=1)
             # adds to all columns the number of dataset to avoid duplicates
-            
-            input_list[idx] = input_list[idx].add_suffix(idx)
+            suffix = list(set(input_list[idx][self.defaults.file_id]))[0]
+            input_list[idx] = input_list[idx].add_suffix(suffix)
             # print(input_list[idx].index)
             if idx == 0:
-                self.MasterProteinAccession = self.MasterProteinAccession + str(idx)
+                self.defaults.MasterProteinAccession = self.defaults.MasterProteinAccession + suffix
             else:
                 pass
-        print(self.MasterProteinAccession)
+        print(self.defaults.MasterProteinAccession)
         Input1 = input_list[0].join(input_list[1:], how='outer')
         print("Done")
         return Input1
@@ -613,7 +613,7 @@ class HypothesisTesting:
         self.comparison_data = self.export_comparison_strings()
         return protein_data
 
-    def peptide_based_lmm_multicore(self, input_file, conditions,number_of_processes=os.cpu_count(),drop_missing=False, techreps=None, plexes=None, pairs=None):
+    def peptide_based_lmm_multicore(self, input_file, conditions,number_of_processes=os.cpu_count()-2,drop_missing=False, techreps=None, plexes=None, pairs=None):
         psms=input_file
         gene_list = list(set(input_file[self.defaults.MasterProteinAccession]))
         n_size = round(len(gene_list)/number_of_processes)
@@ -642,6 +642,7 @@ class HypothesisTesting:
                 result = future_to_df[future]
                 try:
                     data = future.result()
+                    print(data)
                     results.append(data)
                 except Exception as exc:
                     print(exc)
@@ -880,7 +881,8 @@ class Visualization:
         '''Produces a clustered heatmap from all input columns specified in the channels argument and labels them according to the conditions argument.
         '''
         channels = self.defaults.get_channels(input_file)
-        temp = input_file[channels].dropna().copy()
+
+        temp = input_file[channels].replace([np.inf, -np.inf], np.nan).dropna().copy()
         fig = sns.clustermap(
             data=temp[channels], z_score=0, xticklabels=conditions, yticklabels=False)
         if mode == 'save':
@@ -912,8 +914,8 @@ class Pipelines:
         else:
             pass
         print('Peptide based linear models for differential expression')
-
-        result = hypo.peptide_based_lmm(
+        psms = process.total_intensity(psms)
+        result = hypo.peptide_based_lmm_multicore(
             psms, conditions=conditions, pairs=pairs)
         # Annotation
         print('Annotate')
@@ -969,7 +971,7 @@ class Pipelines:
         # Normalization
         print('Normalize each file')
         array_of_dfs = defaults.processor(
-            array_of_dfs, process.total_intensity, channels=channels)
+            array_of_dfs, process.total_intensity)
         # join back for IRS
         print('Join for IRS')
         joined_df = process.psm_joining(array_of_dfs)
@@ -978,7 +980,7 @@ class Pipelines:
         IRS_df = process.IRS_normalisation(joined_df, bridge, number_of_files)
         # LMM
         print('Peptide based linear models for differential expression')
-        result = hypo.peptide_based_lmm(
+        result = hypo.peptide_based_lmm_multicore(
             IRS_df, conditions=conditions, pairs=pairs)
         # Annotation
         print('Annotate')
@@ -1010,128 +1012,3 @@ class Pipelines:
         print('Writing result file')
         return result
 
-class Multiprocessing:
-    '''
-    DEPRECATED Testing environment NOT STABLE
-    '''
-    def __init__(self):
-        pass
-
-    def singlefile_lmm(self, psms, conditions, number_of_processes=1, pairs=None, wd=None, filter=True, mode='save',fc_cutoff=0.5,p_cutoff=0.05, norm=Preprocessing.total_intensity):
-        print('Multiprocessing used')
-        print('Number of available (virtual) cores:', os.cpu_count())
-        if number_of_processes > os.cpu_count():
-            print('Number of processes larger than available core count')
-            print('Using recommended core count:', os.cpu_count()/2)
-            number_of_processes = os.cpu_count()/2
-        
-        defaults = Defaults()
-        process = Preprocessing()
-        hypo = HypothesisTesting()
-        annot = Annotation()
-        vis = Visualization()
-        path = PathwayEnrichment()
-        print("Initialized")
-
-        channels = defaults.get_channels(
-            psms, custom=abundance_column)  # Get channel nammes
-
-        if filter == True:
-            print('Filtering')
-            psms = process.filter_peptides(psms)
-        else:
-            pass
-        print('Peptide based linear models for differential expression')
-        if norm is not None:
-            psms = norm(Preprocessing, psms, channels)
-        else:
-            psms = psms.dropna(subset=channels)
-            print('No Normalization applied')
-        
-        gene_list = list(set(psms[defaults.MasterProteinAccession]))
-        n_size = round(len(gene_list)/number_of_processes)
-        accession_splits = list(process.chunks(gene_list, n_size))
-        temp_dfs = []
-        for i in range(len(accession_splits)):
-            temp = psms[psms[defaults.MasterProteinAccession].isin(values=accession_splits[i])]
-            temp_dfs.append(temp)
-        results=[]
-        with futures.ProcessPoolExecutor(max_workers=number_of_processes) as executor:
-            future_to_df = {executor.submit(hypo.peptide_based_lmm,df,conditions, pairs=pairs,norm=None): df for df in temp_dfs}
-            counter=0
-            for future in futures.as_completed(future_to_df):
-                counter = counter + 1
-                result = future_to_df[future]
-                try:
-                    data = future.result()
-                    results.append(data)
-                except Exception as exc:
-                    print(exc)
-                else:
-                    pass
-
-        for i in range(len(results)):
-            if i == 0:
-                pass
-            else:
-                results[0]=results[0].append(results[i])
-                print(len(results[0]))
-        result = results[0]
-        del results, temp_dfs
-        # Annotation
-        print('Annotate')
-        result = annot.basic_annotation(result,pipe=True)
-        # vis
-        print('Visualization')
-        channels_02 = defaults.get_channels(result)
-        vis.boxplots(result, channels_02, wd=wd, mode=mode)
-        vis.heatmap(result, channels_02, conditions, wd=wd, mode=mode)
-        comparisons = list(hypo.get_comparisons())
-        for index in range(len(comparisons)):
-            fc, p, q = hypo.get_columnnames_for_comparison(comparisons[index])
-            vis.volcano_plot(
-                result, fc, p, comparisons[index], wd=wd, mode=mode)
-        # Pathway enrichment
-        print('Pathway Enrichment')
-        background = list(result.index)
-        path.get_background_sizes(background)
-        for index in range(len(comparisons)):
-            hits = hypo.get_significant_hits(result, comparisons[index])
-            up = hits['up']
-            down = hits['down']
-            up_pathways = path.get_enrichment(up)
-            down_pathways = path.get_enrichment(down)
-            up_pathways.to_csv(
-                wd+str(comparisons[index])+'Pathways_UP.csv', line_terminator='\n')
-            down_pathways.to_csv(
-                wd+str(comparisons[index])+'Pathways_DOWN.csv', line_terminator='\n')
-        
-        print('Done')
-        return result
-
-
-def main():
-    # Testing process for pipelines
-    psms = pd.read_excel("C://Users/kevin/Desktop/PhD/MassSpec/2018_Coli/20191010_KKL_Coli_01_Mix1_PSM.xlsx",engine='openpyxl',header=0)
-    psms2 = pd.read_excel("C://Users/kevin/Desktop/PhD/MassSpec/2018_Coli/20191010_KKL_Coli_01_Mix2_PSM.xlsx",engine='openpyxl',header=0)
-    psms3 = pd.read_excel("C://Users/kevin/Desktop/PhD/MassSpec/2018_Coli/20191010_KKL_Coli_01_Mix3_PSM.xlsx",engine='openpyxl',header=0)
-
-    defaults = Defaults()
-    process = Preprocessing()
-    hypo = HypothesisTesting()
-    channels = defaults.get_channels(
-            psms)
-    psm_dfs = [psms,psms2,psms3]
-    psm_dfs = defaults.processor(psm_dfs, process.filter_peptides)
-    psm_dfs = defaults.processor(psm_dfs, process.total_intensity, channels)
-    data = process.psm_joining(psm_dfs)
-    IRS_df = process.IRS_normalisation(data,'126',3)
-    conditions = ['Empty','Control','Control','Control','Mix1','Mix1','Mix1','Mix2','Mix2','Mix2','Bridge','Empty','Control','Control','Control','Mix1','Mix1','Mix1','Mix2','Mix2','Mix2','Bridge','Empty','Control','Control','Control','Mix1','Mix1','Mix1','Mix2','Mix2','Mix2','Bridge']
-    techreps = ['1','1','1','1','1','1','1','1','1','1','1','2','2','2','2','2','2','2','2','2','2','2','3','3','3','3','3','3','3','3','3','3','3']
-    pairs=[['Control','Mix1'],['Control','Mix2']]
-    result = hypo.peptide_based_lmm(IRS_df,conditions=conditions, plexes=techreps, pairs=pairs)
-
-
-
-if __name__ == '__main__':
-    main()

@@ -1,0 +1,37 @@
+Description,P value,No. found,PathwaySize background,Reactome_ID,FDR,Description
+TAK1 activates NFkB by phosphorylation and activation of IKKs complex,0.000100236237075091,2,21,R-MMU-445989,0.0037087407717783668,TAK1 activates NFkB by phosphorylation and activation of IKKs complex
+RNA Polymerase I Promoter Opening,0.009832268963640799,1,13,R-MMU-73728,0.02795760536799885,RNA Polymerase I Promoter Opening
+,0.008324877767852935,1,11,R-MMU-427413,0.02795760536799885,
+Chromatin modifying enzymes,0.0030339401042773257,1,4,R-MMU-3247509,0.02795760536799885,Chromatin modifying enzymes
+IRAK1 recruits IKK complex,0.006060205666386081,1,8,R-MMU-937039,0.02795760536799885,IRAK1 recruits IKK complex
+Activated PKN1 stimulates transcription of AR (androgen receptor) regulated genes KLK2 and KLK3,0.01058524822668619,1,14,R-MMU-5625886,0.02795760536799885,Activated PKN1 stimulates transcription of AR (androgen receptor) regulated genes KLK2 and KLK3
+JNK (c-Jun kinases) phosphorylation and  activation mediated by activated human TAK1,0.011337750256250802,1,15,R-MMU-450321,0.02795760536799885,JNK (c-Jun kinases) phosphorylation and  activation mediated by activated human TAK1
+NF-kB is activated and signals survival,0.006060205666386081,1,8,R-MMU-209560,0.02795760536799885,NF-kB is activated and signals survival
+p75NTR recruits signalling complexes,0.006060205666386081,1,8,R-MMU-209543,0.02795760536799885,p75NTR recruits signalling complexes
+Interleukin-7 signaling,0.009832268963640799,1,13,R-MMU-1266695,0.02795760536799885,Interleukin-7 signaling
+,0.009832268963640799,1,13,R-MMU-427359,0.02795760536799885,
+RIP-mediated NFkB activation via ZBP1,0.008324877767852935,1,11,R-MMU-1810476,0.02795760536799885,RIP-mediated NFkB activation via ZBP1
+activated TAK1 mediates p38 MAPK activation,0.012089775294269774,1,16,R-MMU-450302,0.02795760536799885,activated TAK1 mediates p38 MAPK activation
+TRAF6 mediated NF-kB activation,0.008324877767852935,1,11,R-MMU-933542,0.02795760536799885,TRAF6 mediated NF-kB activation
+IRAK1 recruits IKK complex upon TLR7/8 or 9 stimulation,0.006060205666386081,1,8,R-MMU-975144,0.02795760536799885,IRAK1 recruits IKK complex upon TLR7/8 or 9 stimulation
+Cyclin A:Cdk2-associated events at S phase entry,0.01058524822668619,1,14,R-MMU-69656,0.02795760536799885,Cyclin A:Cdk2-associated events at S phase entry
+PRC2 methylates histones and DNA,0.01509311036595337,1,20,R-MMU-212300,0.029391846502119724,PRC2 methylates histones and DNA
+HDMs demethylate histones,0.014342990876351422,1,19,R-MMU-3214842,0.029391846502119724,HDMs demethylate histones
+Ovarian tumor domain proteases,0.014342990876351422,1,19,R-MMU-5689896,0.029391846502119724,Ovarian tumor domain proteases
+Cyclin A/B1/B2 associated events during G2/M transition,0.01659192223730267,1,22,R-MMU-69273,0.030695056139009937,Cyclin A/B1/B2 associated events during G2/M transition
+NOD1/2 Signaling Pathway,0.01883657589583899,1,25,R-MMU-168638,0.03318825276885918,NOD1/2 Signaling Pathway
+HATs acetylate histones,0.020330638382721446,1,27,R-MMU-3214847,0.034192437280031525,HATs acetylate histones
+RUNX1 regulates genes involved in megakaryocyte differentiation and platelet function,0.02182280449077634,1,29,R-MMU-8936459,0.03510625070255324,RUNX1 regulates genes involved in megakaryocyte differentiation and platelet function
+Senescence-Associated Secretory Phenotype (SASP),0.029995906306196588,1,40,R-MMU-2559582,0.03790783808666645,Senescence-Associated Secretory Phenotype (SASP)
+B-WICH complex positively regulates rRNA expression,0.02628794379293637,1,35,R-MMU-5250924,0.03790783808666645,B-WICH complex positively regulates rRNA expression
+RMTs methylate histone arginines,0.027030479677402987,1,36,R-MMU-3214858,0.03790783808666645,RMTs methylate histone arginines
+PIP3 activates AKT signaling,0.0292552567057426,1,39,R-MMU-1257604,0.03790783808666645,PIP3 activates AKT signaling
+PKMTs methylate histone lysines,0.0292552567057426,1,39,R-MMU-3214841,0.03790783808666645,PKMTs methylate histone lysines
+HDACs deacetylate histones,0.030736084935134963,1,41,R-MMU-3214815,0.03790783808666645,HDACs deacetylate histones
+RNA Polymerase I Promoter Escape,0.027030479677402987,1,36,R-MMU-73772,0.03790783808666645,RNA Polymerase I Promoter Escape
+"PI5P, PP2A and IER3 Regulate PI3K/AKT Signaling",0.035904168258003376,1,48,R-MMU-6811558,0.040256188652912875,"PI5P, PP2A and IER3 Regulate PI3K/AKT Signaling"
+Factors involved in megakaryocyte development and platelet production,0.035904168258003376,1,48,R-MMU-983231,0.040256188652912875,Factors involved in megakaryocyte development and platelet production
+Oxidative Stress Induced Senescence,0.03442992189489761,1,46,R-MMU-2559580,0.040256188652912875,Oxidative Stress Induced Senescence
+Transcriptional regulation by small RNAs,0.04104926777055845,1,55,R-MMU-5578749,0.04416997684929788,Transcriptional regulation by small RNAs
+Estrogen-dependent gene expression,0.04178241053311962,1,56,R-MMU-9018519,0.04416997684929788,Estrogen-dependent gene expression
+Activation of NF-kappaB in B cells,0.04324729484731166,1,58,R-MMU-1169091,0.04444860859307031,Activation of NF-kappaB in B cells

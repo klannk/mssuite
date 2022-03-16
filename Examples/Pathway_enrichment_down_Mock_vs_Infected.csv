@@ -1,0 +1,17 @@
+Description,P value,No. found,PathwaySize background,Reactome_ID,FDR,Description
+Chemokine receptors bind chemokines,1.3856717387757751e-06,3,5,R-MMU-380108,8.175463258777073e-05,Chemokine receptors bind chemokines
+MyD88 cascade initiated on plasma membrane,2.7574277369216344e-05,2,2,R-GGA-977240,0.000542294121594588,MyD88 cascade initiated on plasma membrane
+The IPAF inflammasome,2.7574277369216344e-05,2,2,R-HSA-844623,0.000542294121594588,The IPAF inflammasome
+G alpha (i) signalling events,0.0003736034662918149,3,27,R-MMU-418594,0.00551065112780427,G alpha (i) signalling events
+Sema4D induced cell migration and growth-cone collapse,0.0009694802038907467,2,9,R-MMU-416572,0.011439866405910812,Sema4D induced cell migration and growth-cone collapse
+Biosynthesis of DPAn-3 SPMs,0.005314437555417853,1,1,R-MMU-9025094,0.02239655826926095,Biosynthesis of DPAn-3 SPMs
+Beta defensins,0.005314437555417853,1,1,R-MMU-1461957,0.02239655826926095,Beta defensins
+NFkB  and MAPK activation mediated by TRAF6,0.005314437555417853,1,1,R-GGA-433822,0.02239655826926095,NFkB  and MAPK activation mediated by TRAF6
+Biosynthesis of EPA-derived SPMs,0.005314437555417853,1,1,R-MMU-9018679,0.02239655826926095,Biosynthesis of EPA-derived SPMs
+TLR5 cascade,0.005314437555417853,1,1,R-GGA-451534,0.02239655826926095,TLR5 cascade
+Biosynthesis of DHA-derived SPMs,0.005314437555417853,1,1,R-MMU-9018677,0.02239655826926095,Biosynthesis of DHA-derived SPMs
+Antagonism of Activin by Follistatin,0.005314437555417853,1,1,R-MMU-2473224,0.02239655826926095,Antagonism of Activin by Follistatin
+Biosynthesis of electrophilic ω-3 PUFA oxo-derivatives,0.005314437555417853,1,1,R-MMU-9027604,0.02239655826926095,Biosynthesis of electrophilic ω-3 PUFA oxo-derivatives
+Glycoprotein hormones,0.005314437555417853,1,1,R-MMU-209822,0.02239655826926095,Glycoprotein hormones
+Interleukin-33 signaling,0.010601300833295382,1,2,R-MMU-9014843,0.03909229682277672,Interleukin-33 signaling
+Interaction between PHLDA1 and AURKA,0.010601300833295382,1,2,R-MMU-8854521,0.03909229682277672,Interaction between PHLDA1 and AURKA
